@@ -1,6 +1,6 @@
 # CLI reference
 
-Install with `npm install --global @evanston/plankton@latest` (Node.js 22+). Version 0.2.1 provides the CLI; `plankton --version` confirms the installed version. See [authentication](authentication.md) for first-time setup.
+Install with `npm install --global @evanston/plankton@latest` (Node.js 22+). Version 0.3.2 provides the CLI; `plankton --version` confirms the installed version. See [authentication](authentication.md) for first-time setup.
 
 Run `plankton --help`, `plankton <group> --help`, or `plankton <group> <command> --help` for focused help. Discovery requires no credentials and does not load a browser. `--json` is a global option accepted before or after the command. Help and version output remain text.
 

@@ -1,6 +1,6 @@
 # Compatibility and validation
 
-The 0.2.1 CLI and core require Node.js 22+ and target the Planka 2.0.0-rc.4 API. Compatibility with other Planka versions is not established.
+The 0.3.2 CLI and core require Node.js 22+ and target the Planka 2.0.0-rc.4 API. Compatibility with other Planka versions is not established.
 
 The automated suite covers command parsing, help and version output, compact JSON/readable output, pagination, request fields, scoped references, malformed responses, write uncertainty, setup orchestration and credential replacement. The full release check is `pnpm check`.
 

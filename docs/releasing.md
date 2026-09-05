@@ -1,6 +1,6 @@
 # Releasing to npm
 
-The CLI is published as `@evanston/plankton`; its API dependency is `@evanston/plankton-core`. Both are public scoped packages. The CLI release is version 0.2.1.
+The CLI is published as `@evanston/plankton`; its API dependency is `@evanston/plankton-core`. Both are public scoped packages. The CLI release is version 0.3.2.
 
 ## Prepare and verify
 
@@ -21,9 +21,9 @@ Inspect both archives before publishing. Confirm the versions, the CLI's `bin` e
 Authenticate with `npm login` if necessary; `npm whoami` confirms the publisher. Publish the reviewed archives, core first. Substitute the actual versions and archive names for future releases:
 
 ```sh
-npm publish /tmp/plankton-release/evanston-plankton-core-0.2.1.tgz --access public --tag latest
-npm view @evanston/plankton-core@0.2.1 version
-npm publish /tmp/plankton-release/evanston-plankton-0.2.1.tgz --access public --tag latest
+npm publish /tmp/plankton-release/evanston-plankton-core-0.3.2.tgz --access public --tag latest
+npm view @evanston/plankton-core@0.3.2 version
+npm publish /tmp/plankton-release/evanston-plankton-0.3.2.tgz --access public --tag latest
 npm view @evanston/plankton@latest version bin dependencies --json
 ```
 
