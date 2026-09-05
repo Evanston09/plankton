@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build": "pnpm -r build",
+    "format": "prettier . --write",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm build && vitest run",
     "check": "pnpm test && pnpm typecheck",

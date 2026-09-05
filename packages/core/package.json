@@ -1,7 +1,7 @@
 {
   "author": "Evan Kim",
   "name": "@evanston/plankton-core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local Planka integration core",
   "type": "module",
   "license": "MIT",
@@ -25,5 +25,17 @@
   },
   "dependencies": {
     "zod": "^4.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Evanston09/plankton.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/Evanston09/plankton#readme",
+  "bugs": {
+    "url": "https://github.com/Evanston09/plankton/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

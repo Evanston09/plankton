@@ -1,5 +1,7 @@
 # CLI reference
 
+Install with `npm install --global @evanston/plankton@latest` (Node.js 22+). Version 0.2.0 provides the CLI; `plankton --version` confirms the installed version. See [authentication](authentication.md) for first-time setup.
+
 Run `plankton --help`, `plankton <group> --help`, or `plankton <group> <command> --help` for focused help. Discovery requires no credentials and does not load a browser. `--json` is a global option accepted before or after the command. Help and version output remain text.
 
 ## Commands
@@ -22,7 +24,7 @@ Run `plankton --help`, `plankton <group> --help`, or `plankton <group> <command>
 
 `--board` scopes a card name; card IDs and same-instance card links do not require it. Project and board references accept names, IDs or same-instance links. List, checklist and task references accept names or IDs within their parent scope. Use quotes around names with spaces. IDs are strings.
 
-`cards find` matches title substrings, case-insensitively. Direct name resolution requires an exact case-insensitive match. Duplicate names return `AMBIGUOUS` with compact choices, capped at 25 with truncation disclosed. The agent can select an ID from context or obtain more detail before deciding whether clarification is needed. Incomplete search results cannot safely establish a unique name match.
+`cards find` matches title substrings, case-insensitively. Direct name resolution requires an exact case-insensitive match. Duplicate names return `AMBIGUOUS` with compact choices, capped at 25 with truncation disclosed. The agent can select an ID from context or obtain more detail before deciding whether clarification is needed. Exact name resolution is independent of the display search limit: a unique exact match can resolve even when a substring search would exceed 100 matches. An incomplete underlying board scan cannot safely establish a unique name match.
 
 Moves default to the card's current board. `--to-board` changes the destination board; `--board` identifies the source when using a card name. Positions default to `65535`. Card type defaults to `project`; `story` is also supported. Creating/moving into trash is excluded.
 

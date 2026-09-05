@@ -120,7 +120,7 @@ export async function runCli(argv: string[]) {
   const program = new Command()
     .name("plankton")
     .description("Browse and update Planka boards, cards and checklists")
-    .version("0.1.0")
+    .version("0.2.0")
     .option("--json", "Machine-readable results on stdout, errors on stderr")
     .addHelpCommand()
     .exitOverride()

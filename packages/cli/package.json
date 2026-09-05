@@ -1,7 +1,7 @@
 {
   "author": "Evan Kim",
   "name": "@evanston/plankton",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Planka CLI for people and explicitly invoked agent skills",
   "type": "module",
   "license": "MIT",
@@ -33,5 +33,17 @@
   },
   "bin": {
     "plankton": "dist/cli.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Evanston09/plankton.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/Evanston09/plankton#readme",
+  "bugs": {
+    "url": "https://github.com/Evanston09/plankton/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
