@@ -1,56 +1,57 @@
 # Plankton
 
-View and update your robotics team's Planka boards through a CLI and explicitly invoked skills for Codex and Claude Code. Browse boards, find and move cards, edit descriptions, and manage checklists.
+Give Codex or Claude Code access to your team's [Planka](https://planka.app/) boards. Ask your agent to find cards, move work, update descriptions, and manage checklists in plain language.
 
-The full skill instructions load only when you invoke the skill. Once loaded, your agent can use the CLI for relevant follow-up requests. Codex retains small discovery metadata; Claude Code's explicit-only setting also hides the description from automatic discovery. No background integration process starts with your assistant.
+## Quick start
 
-## Install
+Requires [Node.js 22+](https://nodejs.org/) and a Planka account.
 
-Requires **Node.js 22+** and a Planka account. The API target is **Planka 2.0.0-rc.4**. Install the CLI from npm:
+1. Install Plankton and the agent skill:
 
-```sh
-npm install --global @evanston/plankton@latest
-plankton --version
-plankton setup https://your-planka.example
-```
+   ```sh
+   npm install --global @evanston/plankton@latest
+   npx skills add https://github.com/Evanston09/plankton
+   ```
 
-Setup opens a browser for normal sign-in, including SSO, and saves the connection in your OS credential vault. With a URL supplied, there are no terminal questions, so your agent can run setup and wait while you sign in. Chromium is downloaded on first use if needed. See [authentication help](docs/authentication.md).
+   For the agent skill, select **Global** if you want to use Plankton anywhere, then select the agents you want to add it to.
 
-Skills expect `plankton` on the assistant's PATH. npm installation supplies the CLI; skill installation is a separate step. See [development](docs/development.md) to run from source and [releasing](docs/releasing.md) for the npm release process.
+2. Open your agent and connect to Planka:
 
-## Add the skill
+   - Codex: `$plankton Connect to https://your-planka.example`
+   - Claude Code: `/plankton Connect to https://your-planka.example`
 
-Install the [Plankton skill](skills/plankton/SKILL.md) from GitHub using the [skills CLI](https://www.skills.sh/docs):
+   Plankton opens a browser window for sign-in, including SSO, and stores the connection in your operating system's credential vault. Chromium may be downloaded the first time. Your password is never entered in chat.
 
-```sh
-npx skills add Evanston09/plankton --skill plankton --agent codex claude-code
-```
+3. Ask for what you need:
 
-Select either agent with `--agent codex` or `--agent claude-code`, or use both as shown. Add `--global` to make the skill available across projects. From a local checkout, replace `Evanston09/plankton` with `.`.
+   > Find the intake card on the Robot board and move it to In Progress.
 
-Invoke **`$plankton`** in Codex or **`/plankton`** in Claude Code. Skill installation supplies the agent instructions; the `plankton` CLI must also be installed and available on the assistant's PATH.
+   > Add a checklist named Release to the launch card.
 
-Try: “Find the intake card on the Robot board and move it to In Progress.” After the explicit invocation, follow-up requests can use the loaded instructions without invoking the skill for each operation. Your assistant's normal execution permissions still apply.
+   > Show me the incomplete tasks on the motor controller card.
 
-## Use the CLI directly
+You only need to invoke Plankton once per conversation. After that, continue asking normally.
+
+## Direct CLI use
+
+The skill uses the `plankton` CLI behind the scenes. You can also run it yourself:
 
 ```sh
 plankton boards list
-plankton cards find --board Robot --query intake --json
-plankton cards get 123 --json
-plankton cards move 123 --list "In Progress" --json
-plankton cards edit 123 --description-file notes.md --json
-plankton tasks complete 456 --card 123 --checklist 789 --json
+plankton cards find --board Robot --query intake
+plankton cards move 123 --list "In Progress"
+plankton doctor
 ```
 
-Readable output is the default. `--json` gives compact structured results. Lists/searches omit descriptions; `cards get` reads details. The agent can use IDs and returned match details to resolve your intent, asking you when necessary. Each command performs one operation; an agent can combine commands to complete a request.
+Run `plankton --help` to explore commands, or use `--json` for structured output. See the [CLI reference](docs/cli.md) for every command.
 
-See the [command reference](docs/cli.md) for all operations, pagination, stdin input, and errors. Deletion is not supported.
+## Help
 
-```sh
-plankton doctor --json   # Check your connection
-plankton login          # Sign in again; reuse the saved URL
-plankton logout         # Remove local credentials
-```
+- [Authentication and sign-in issues](docs/authentication.md)
+- [Compatibility and testing limits](docs/compatibility.md)
+- [Development setup](docs/development.md)
+- [Core TypeScript library](packages/core)
 
-[Compatibility and testing limits](docs/compatibility.md) · [TypeScript library](packages/core) · [MIT license](LICENSE)
+Plankton targets Planka 2.0.0-rc.4. Deletion is not supported.
+
+[MIT license](LICENSE)
