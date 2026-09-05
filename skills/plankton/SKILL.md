@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 Use the local `plankton` CLI for Planka requests. Once invoked, keep using it for relevant follow-up requests; another skill invocation is not needed for each command.
 
-Discover commands with `plankton --help` and `<group> <command> --help`. Use `--json`: stdout contains `{ok:true,data}`, stderr contains `{ok:false,error}`, and failures exit 1. Run individual commands as needed to complete the request.
+Read [commands.md](commands.md) when choosing commands or composing a workflow; it includes required flags, examples, pagination, and recovery. Check installed-version syntax with `plankton --help` and `plankton <group> <command> --help`. Use `--json`: stdout contains `{ok:true,data}`, stderr contains `{ok:false,error}`, and failures exit 1. Run individual commands as needed to complete the request.
 
 For missing or expired login, direct the user to complete `plankton setup <URL>` or `plankton login` in their own terminal before continuing Planka requests. Link to the [setup instructions](https://github.com/Evanston09/plankton#quick-start), which cover signing in again in a separate browser or manually importing an existing Planka session. Never request credentials in chat or pass them as command arguments.
 
