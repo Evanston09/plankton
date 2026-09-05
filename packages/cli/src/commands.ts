@@ -247,6 +247,20 @@ export async function runCli(argv: string[]) {
       .description("List boards")
       .option("--project <reference>", "Filter by project name, ID or link"),
   ).action((o) => execute("boards", { project: o.project }, o));
+  for (const command of ["labels", "members"] as const) {
+    page(
+      boards
+        .command(command)
+        .description(`List board ${command}`)
+        .requiredOption("--board <reference>", "Board name, ID or link"),
+    ).action((o) =>
+      execute(
+        command === "labels" ? "board_labels" : "board_members",
+        { board: o.board },
+        o,
+      ),
+    );
+  }
   const lists = program.command("lists").description("Browse board lists");
   page(
     lists
@@ -306,7 +320,9 @@ export async function runCli(argv: string[]) {
     cardScope(
       cards
         .command("get <card>")
-        .description("Read a card description and paged checklists/tasks"),
+        .description(
+          "Read a card description, members, labels and paged checklists/tasks",
+        ),
     ),
   ).action((card, o) => execute("read_card", { card, board: o.board }, o));
   descriptions(

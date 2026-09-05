@@ -41,28 +41,36 @@ export function resolveReference(
   value: string,
   items: Entity[],
   kind: string,
+  field: "name" | "username" = "name",
 ): Entity {
   const id = referenceId(baseUrl, value, kind);
   const matches = items.filter((i) =>
     id
       ? i.id === id
-      : i.name?.toLocaleLowerCase() === value.toLocaleLowerCase(),
+      : i[field]?.toLocaleLowerCase() === value.toLocaleLowerCase(),
   );
-  if (!matches.length) {
+  const suggest = !matches.length && (kind === "labels" || kind === "users");
+  if (!matches.length && !suggest) {
     throw new PlanktonError("NOT_FOUND", `No matching ${kind} in this scope.`);
   }
-  if (matches.length > 1) {
+  if (matches.length > 1 || suggest) {
+    const choices = suggest ? items : matches;
     throw new PlanktonError(
-      "AMBIGUOUS",
-      `Multiple ${kind} match. Choose an ID.`,
+      suggest ? "NOT_FOUND" : "AMBIGUOUS",
+      suggest
+        ? `No matching ${kind} in this scope. Choose an available name or ID.`
+        : `Multiple ${kind} match. Choose an ID.`,
       {
-        choices: matches
+        choices: choices
           .slice(0, 25)
           .map((i) =>
             Object.fromEntries(
               [
                 "id",
                 "name",
+                "username",
+                "color",
+                "role",
                 "projectId",
                 "projectName",
                 "boardId",
@@ -77,8 +85,8 @@ export function resolveReference(
                 .map((key) => [key, i[key]]),
             ),
           ),
-        ...(matches.length > 25
-          ? { truncated: true, total: matches.length }
+        ...(choices.length > 25
+          ? { truncated: true, total: choices.length }
           : {}),
       },
     );

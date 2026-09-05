@@ -55,6 +55,39 @@ export class PlankaClient {
     return data;
   }
 
+  private boardMembers(included: {
+    users?: Entity[];
+    boardMemberships?: Entity[];
+  }) {
+    const { users, boardMemberships } = included;
+    if (!users || !boardMemberships)
+      throw new PlanktonError(
+        "API",
+        "Board response is missing users or board memberships.",
+      );
+    return users
+      .filter((user) =>
+        boardMemberships.some((member) => member.userId === user.id),
+      )
+      .map((user) => ({
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        role: boardMemberships.find((member) => member.userId === user.id)
+          ?.role,
+      }));
+  }
+
+  private boardLabels(included: { labels?: Entity[] }) {
+    if (!included.labels)
+      throw new PlanktonError("API", "Board response is missing labels.");
+    return included.labels.map((label) => ({
+      id: label.id,
+      name: label.name,
+      color: label.color,
+    }));
+  }
+
   private async card(value: string, board?: string) {
     let id = referenceId(this.url, value, "cards");
     if (!id) {
@@ -289,6 +322,14 @@ export class PlankaClient {
             ),
         };
       }
+      case "board_labels":
+        return {
+          items: this.boardLabels((await this.board(args.board)).included),
+        };
+      case "board_members":
+        return {
+          items: this.boardMembers((await this.board(args.board)).included),
+        };
       case "lists":
         return { items: (await this.board(args.board)).included.lists };
       case "find_cards":
@@ -357,12 +398,48 @@ export class PlankaClient {
           ),
         };
       }
-      case "read_card":
+      case "read_card": {
+        const memberships = data.included.cardMemberships.filter(
+          (row) => row.cardId === card.id,
+        );
+        const cardLabels = data.included.cardLabels.filter(
+          (row) => row.cardId === card.id,
+        );
+        let members: Entity[] = [];
+        let labels: Entity[] = [];
+        if (memberships.length || cardLabels.length) {
+          const boardRef = card.boardId ?? args.board;
+          if (!boardRef)
+            throw new PlanktonError(
+              "API",
+              "Card response is missing its board ID.",
+            );
+          const board = await this.board(boardRef);
+          members = memberships.map((row) => {
+            const user = board.included.users?.find(
+              (user) => user.id === row.userId,
+            );
+            return {
+              id: row.userId,
+              name: user?.name,
+              username: user?.username,
+            };
+          });
+          labels = cardLabels.map((row) => {
+            const label = board.included.labels?.find(
+              (label) => label.id === row.labelId,
+            );
+            return { id: row.labelId, name: label?.name, color: label?.color };
+          });
+        }
         return {
+          members,
+          labels,
           item: this.link(card),
           taskLists: data.included.taskLists,
           tasks: data.included.tasks,
         };
+      }
       case "edit_card": {
         const item = await this.writeItem(`cards/${card.id}`, "PATCH", {
           name: args.name,
@@ -388,29 +465,15 @@ export class PlankaClient {
               "Supply --board to resolve a label or member name.",
             );
           const board = await this.board(boardRef);
-          let items = board.included.labels;
-          if (!isLabel) {
-            const { users, boardMemberships } = board.included;
-            if (!users || !boardMemberships)
-              throw new PlanktonError(
-                "API",
-                "Board response is missing users or board memberships.",
-              );
-            items = users.filter((user) =>
-              boardMemberships.some((member) => member.userId === user.id),
-            );
-          }
-          if (!items)
-            throw new PlanktonError("API", "Board response is missing labels.");
-          // @username explicitly selects usernames; other names use display names.
-          if (!isLabel && value.startsWith("@")) {
-            items = items.map((user) => ({ ...user, name: user.username }));
-          }
+          const items = isLabel
+            ? this.boardLabels(board.included)
+            : this.boardMembers(board.included);
           id = resolveReference(
             this.url,
             !isLabel && value.startsWith("@") ? value.slice(1) : value,
             items,
             isLabel ? "labels" : "users",
+            !isLabel && value.startsWith("@") ? "username" : "name",
           ).id;
         }
         const remove =

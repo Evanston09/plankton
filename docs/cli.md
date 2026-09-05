@@ -10,6 +10,8 @@ Run `plankton --help`, `plankton <group> --help`, or `plankton <group> <command>
 | ---------------------------------------------- | --------------------------------------- | ------------------------------------------------------------- |
 | `projects list`                                | —                                       | `--limit`, `--offset`                                         |
 | `boards list`                                  | —                                       | `--project`, `--limit`, `--offset`                            |
+| `boards labels`                                | `--board`                               | `--limit`, `--offset`                                         |
+| `boards members`                               | `--board`                               | `--limit`, `--offset`                                         |
 | `lists list`                                   | `--board`                               | `--limit`, `--offset`                                         |
 | `cards list` / `cards find`                    | `--board`                               | `--query`, `--list`, `--limit`, `--offset`                    |
 | `cards archive <card>` / `cards delete <card>` | card reference                          | `--board`                                                     |
@@ -35,7 +37,11 @@ Card links accept both `/cards/<id>` and the web UI’s `/boards/<boardId>/cards
 
 ## Due dates, labels and members
 
+Board discovery accepts a board name, ID or link and supports `--limit` and `--offset`. Labels include ID, name and color; members include user ID, display name, username and board role. Only current board members appear in member discovery.
+
 ```sh
+plankton boards labels --board "Robot" --json
+plankton boards members --board "Robot" --json
 plankton cards edit 123 --due-date '2026-09-10T17:00:00-04:00'
 plankton cards edit 123 --clear-due-date
 plankton cards add-label 123 --label 'Urgent'
@@ -65,7 +71,9 @@ Success exits **0**, with one `{ "ok": true, "data": ... }` JSON object on stdou
 
 Text mode shows labeled fields. Control characters and line breaks in field values are escaped so terminal output cannot execute escape sequences. JSON mode preserves the original field strings through JSON decoding.
 
-Collections and write results contain selected summary fields: ID, name, parent IDs, type, position, completion state and links where available. Card searches also include board/list names when available. `cards get` adds the description and checklist/task collections. `checklists list` returns checklist and task collections plus the parent card link. Writes return the affected item and its card link where applicable.
+Collections and write results contain selected summary fields: ID, name, parent IDs, type, position, completion state and links where available. Card searches also include board/list names when available. `checklists list` returns checklist and task collections plus the parent card link. Writes return the affected item and its card link where applicable.
+
+`cards get` includes `members` and `labels` alongside the description and checklists, with independent paging for each collection. It resolves assignment names through the current board; an unavailable user or label remains visible by ID. Use it on sibling cards to inspect shared assignments. `cards list` and `cards find` continue to return compact card summaries.
 
 Browse/checklist collections default to **25 rows**, with `--limit 1..100`. Each collection is paged independently using `--offset` (default 0). `data.paging.<collection>` reports the collection's `total` and, when more rows remain, `nextOffset`. `data.truncated` is true if any collection has further rows. An offset beyond the end returns an empty collection. Pagination is over the current response, not a persistent snapshot; concurrent board changes may shift rows.
 
@@ -91,6 +99,8 @@ Card list/find results include `paging.items.total`, optional `nextOffset`, and 
 | `PERMISSION`      | The signed-in Planka account lacks permission.                                                     |
 | `NETWORK` / `API` | Check connectivity and `doctor`; inspect the error message.                                        |
 | `UNCERTAIN_WRITE` | Read current state before retrying; the write may already have succeeded.                          |
+
+Unresolved label or member names return `NOT_FOUND` with available `details.choices`, capped at 25 with `truncated` and `total` when more exist. Username errors preserve both display names and usernames. Use discovery commands to page through all choices, then retry with the correct name or ID; commands never automatically substitute a suggested choice.
 
 There is no multi-operation transaction or automatic write retry. If the agent executes several commands and one fails, earlier successful commands remain applied.
 

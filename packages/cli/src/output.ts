@@ -8,6 +8,8 @@ const fields = [
   "id",
   "name",
   "username",
+  "color",
+  "role",
   "projectId",
   "projectName",
   "boardId",
@@ -48,7 +50,10 @@ export function compactResult(
   }
   const result: Record<string, unknown> = {};
   const paging: Record<string, { total: number; nextOffset?: number }> = {};
-  const page = (key: "items" | "taskLists" | "tasks", rows: Entity[]) => {
+  const page = (
+    key: "items" | "taskLists" | "tasks" | "members" | "labels",
+    rows: Entity[],
+  ) => {
     const end = options.offset + options.limit;
     result[key] = rows.slice(options.offset, end).map((row) => summary(row));
     paging[key] = {
@@ -61,6 +66,8 @@ export function compactResult(
   if ("items" in data) page("items", data.items);
   if ("taskLists" in data) page("taskLists", data.taskLists);
   if ("tasks" in data) page("tasks", data.tasks);
+  if ("members" in data) page("members", data.members);
+  if ("labels" in data) page("labels", data.labels);
   if (Object.keys(paging).length) {
     result.paging = paging;
     result.truncated = Object.values(paging).some(

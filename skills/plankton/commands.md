@@ -7,6 +7,8 @@ Run commands with the installed `plankton` CLI and append `--json` for structure
 ```sh
 plankton projects list --json
 plankton boards list --project "Engineering" --json
+plankton boards labels --board "Robot" --json
+plankton boards members --board "Robot" --json
 plankton lists list --board "Robot" --json
 plankton cards list --board "Robot" --list "Todo" --json
 plankton cards find --board "Robot" --query "intake" --json
@@ -16,9 +18,13 @@ plankton checklists list --card 123 --json
 
 Replace example names and IDs with resolved targets. Project and board references accept names, IDs, or same-instance links. Card references accept names, IDs, or same-instance links; card names require `--board`. Lists, checklists, and tasks accept names or IDs within their parent scope. Quote names with spaces and preserve IDs as strings.
 
+Board discovery accepts a board name, ID or link and supports `--limit` and `--offset`. Labels include ID, name and color; members include user ID, display name, username and board role. Only current board members appear in member discovery.
+
 `cards find` searches case-insensitive title substrings; an omitted query lists all cards. `cards list` accepts the same filters. Direct name resolution uses exact case-insensitive matches. Resolve ambiguous names from returned choices and context, then use IDs for subsequent commands.
 
-Search returns summaries. `cards get` includes the description, `taskLists`, and `tasks`; `checklists list` includes both checklist and task collections. Match a task's `taskListId` to a checklist's `id` to group tasks, and inspect `isCompleted` to find unfinished tasks.
+`cards get` includes `members` and `labels` alongside the description and checklists, with independent paging for each collection. It resolves assignment names through the current board; an unavailable user or label remains visible by ID. Use it on sibling cards to inspect shared assignments. `cards list` and `cards find` continue to return compact card summaries.
+
+`cards get` and `checklists list` include `taskLists` (`items` for `checklists list`) and `tasks`. Match a task's `taskListId` to a checklist's `id` to group tasks, and inspect `isCompleted` to find unfinished tasks.
 
 ## Create and update cards
 
@@ -112,5 +118,7 @@ Success exits 0 with `{ "ok": true, "data": ... }` on stdout. Failure exits 1 wi
 | `PERMISSION`           | Report that the signed-in account lacks access.                                             |
 | `NETWORK` / `API`      | Inspect the error and check connectivity with `doctor`.                                     |
 | `UNCERTAIN_WRITE`      | Read current state before retrying; the write may have succeeded.                           |
+
+Unresolved label or member names return `NOT_FOUND` with available `details.choices`, capped at 25 with `truncated` and `total` when more exist. Username errors preserve both display names and usernames. Use discovery commands to page through all choices, then retry with the correct name or ID; commands never automatically substitute a suggested choice.
 
 Commands perform one operation each; there is no transaction across calls or automatic write retry. If a sequence fails, report the steps already completed. Writes return compact summaries and useful links; fetch details when needed. Use `--debug` only for diagnosis: it adds sanitized JSON records to stderr, so stderr may contain multiple JSON lines.

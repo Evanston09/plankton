@@ -526,3 +526,151 @@ it("rejects ambiguous labels and nonmembers without writing", async () => {
   ).rejects.toMatchObject({ code: "NOT_FOUND" });
   expect(requests.every((request) => request.method === "GET")).toBe(true);
 });
+
+it.each(["labels", "members"])(
+  "discovers board %s with paging and compact metadata",
+  async (command) => {
+    responseQueue = [
+      {
+        ...assignmentsBoard,
+        included: {
+          ...assignmentsBoard.included,
+          labels: [
+            {
+              id: "60",
+              name: "Unstarted",
+              color: "berry-red",
+              internal: "omit",
+            },
+            { id: "61", name: "Done" },
+          ],
+          boardMemberships: [{ id: "80", userId: "70", role: "editor" }],
+        },
+      },
+    ];
+    await runCli([
+      "boards",
+      command,
+      "--board",
+      "https://planka.example/boards/10",
+      "--limit",
+      "1",
+      "--json",
+    ]);
+    expect(output().data.items).toEqual(
+      command === "labels"
+        ? [{ id: "60", name: "Unstarted", color: "berry-red" }]
+        : [{ id: "70", name: "Alex", username: "alex", role: "editor" }],
+    );
+    expect(output().data.paging.items.total).toBe(command === "labels" ? 2 : 1);
+    expect(requests).toHaveLength(1);
+  },
+);
+
+it("reads only the card's assigned members and labels, including unresolved IDs", async () => {
+  responseQueue = [
+    {
+      ...details,
+      included: {
+        ...details.included,
+        users: [{ id: "99", name: "Creator only" }],
+        cardMemberships: [
+          { id: "80", cardId: "30", userId: "70" },
+          { id: "81", cardId: "31", userId: "71" },
+          { id: "82", cardId: "30", userId: "72" },
+        ],
+        cardLabels: [{ id: "90", cardId: "30", labelId: "60" }],
+      },
+    },
+    assignmentsBoard,
+  ];
+  await runCli(["cards", "get", "30", "--limit", "1", "--json"]);
+  expect(output().data.members).toEqual([
+    { id: "70", name: "Alex", username: "alex" },
+  ]);
+  expect(output().data.labels).toEqual([{ id: "60", name: "Urgent" }]);
+  expect(output().data.paging.members).toEqual({ total: 2, nextOffset: 1 });
+  expect(requests.map((r) => r.path)).toEqual([
+    "https://planka.example/api/cards/30",
+    "https://planka.example/api/boards/10",
+  ]);
+});
+
+it("shows empty assignments without fetching the board", async () => {
+  responseQueue = [details];
+  await runCli(["cards", "get", "30", "--json"]);
+  expect(output().data).toMatchObject({ members: [], labels: [] });
+  expect(requests).toHaveLength(1);
+});
+
+it.each([
+  ["add-label", "--label", "Not Started", [{ id: "60", name: "Urgent" }]],
+  [
+    "assign",
+    "--member",
+    "programming assignees",
+    [{ id: "70", name: "Alex", username: "alex" }],
+  ],
+  [
+    "assign",
+    "--member",
+    "@missing",
+    [{ id: "70", name: "Alex", username: "alex" }],
+  ],
+])(
+  "returns available choices for unresolved %s %s %s",
+  async (command, flag, value, choices) => {
+    responseQueue = [details, assignmentsBoard];
+    await expect(
+      runCli([
+        "cards",
+        command as string,
+        "30",
+        flag as string,
+        value as string,
+      ]),
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      details: { choices },
+    });
+    expect(requests.every((r) => r.method === "GET")).toBe(true);
+  },
+);
+
+it("caps available choices and discloses truncation", async () => {
+  responseQueue = [
+    details,
+    {
+      ...assignmentsBoard,
+      included: {
+        ...assignmentsBoard.included,
+        labels: Array.from({ length: 26 }, (_, i) => ({
+          id: String(i + 100),
+          name: `Label ${i}`,
+        })),
+      },
+    },
+  ];
+  const error = await runCli([
+    "cards",
+    "add-label",
+    "30",
+    "--label",
+    "Missing",
+  ]).catch((error) => error);
+  expect(error).toMatchObject({
+    code: "NOT_FOUND",
+    details: { truncated: true, total: 26 },
+  });
+  expect(error.details.choices).toHaveLength(25);
+});
+
+it.each(["labels", "members"])(
+  "requires a board for discovery of %s before credentials",
+  async (command) => {
+    await expect(runCli(["boards", command])).rejects.toMatchObject({
+      code: "USAGE",
+    });
+    expect(mocks.connect).not.toHaveBeenCalled();
+  },
+);

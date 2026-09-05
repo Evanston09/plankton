@@ -39,6 +39,12 @@ export const cardResponseSchema = itemResponseSchema.extend({
   included: z.object({
     taskLists: z.array(entitySchema),
     tasks: z.array(entitySchema),
+    cardMemberships: z
+      .array(entitySchema.extend({ cardId: id, userId: id }))
+      .default([]),
+    cardLabels: z
+      .array(entitySchema.extend({ cardId: id, labelId: id }))
+      .default([]),
   }),
 });
 export type CardResponse = z.infer<typeof cardResponseSchema>;
@@ -50,7 +56,12 @@ export type SearchResult = CollectionResult & {
   paging: { items: { total: number; nextOffset?: number } };
 };
 export type ItemResult = { item: Entity; url?: string };
-export type CardResult = ItemResult & { taskLists: Entity[]; tasks: Entity[] };
+export type CardResult = ItemResult & {
+  taskLists: Entity[];
+  tasks: Entity[];
+  members: Entity[];
+  labels: Entity[];
+};
 export type TaskListsResult = CollectionResult & {
   tasks: Entity[];
   url: string;
@@ -59,6 +70,8 @@ export interface OperationResults {
   projects: CollectionResult;
   boards: CollectionResult;
   lists: CollectionResult;
+  board_labels: CollectionResult;
+  board_members: CollectionResult;
   find_cards: SearchResult;
   read_card: CardResult;
   create_card: ItemResult;
@@ -87,6 +100,8 @@ export const operationSchemas = {
   projects: z.object({}).strict(),
   boards: z.object({ project: ref.optional() }).strict(),
   lists: z.object({ board: ref }).strict(),
+  board_labels: z.object({ board: ref }).strict(),
+  board_members: z.object({ board: ref }).strict(),
   find_cards: z
     .object({
       board: ref,
