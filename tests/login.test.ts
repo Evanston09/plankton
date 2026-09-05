@@ -33,28 +33,33 @@ it("validates a replacement before saving and preserves the old connection on fa
     vi.unstubAllGlobals();
   }
 });
-it("saves a verified account and connection", async () => {
-  const store = { read: vi.fn(), write: vi.fn(), clear: vi.fn() };
-  vi.stubGlobal(
-    "fetch",
-    vi
-      .fn()
-      .mockResolvedValue(Response.json({ item: { id: "1", name: "User" } })),
-  );
-  try {
-    expect(
-      await saveValidatedConnection(store, "https://planka.example/", {
-        accessToken: "token",
-      }),
-    ).toMatchObject({ id: "1" });
-    expect(store.write).toHaveBeenCalledWith({
-      url: "https://planka.example",
-      session: { accessToken: "token" },
-    });
-  } finally {
-    vi.unstubAllGlobals();
-  }
-});
+it.each([undefined, null, "user"])(
+  "saves a verified account with username %s and its connection",
+  async (username) => {
+    const store = { read: vi.fn(), write: vi.fn(), clear: vi.fn() };
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          Response.json({ item: { id: "1", name: "User", username } }),
+        ),
+    );
+    try {
+      expect(
+        await saveValidatedConnection(store, "https://planka.example/", {
+          accessToken: "token",
+        }),
+      ).toMatchObject({ id: "1", username });
+      expect(store.write).toHaveBeenCalledWith({
+        url: "https://planka.example",
+        session: { accessToken: "token" },
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  },
+);
 it("requires setup when no connection exists", async () => {
   await expect(
     connectedClient({

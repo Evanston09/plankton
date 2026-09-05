@@ -50,7 +50,7 @@ Use this option if you are already signed into Planka in your usual browser and 
    plankton setup https://your-planka.example --manual
    ```
 
-4. In the browser's cookie table, find the row named `accessToken`. Copy its complete **Value**, paste it into the `accessToken cookie (hidden):` terminal prompt, and press Enter. Copy only the value, without the cookie name, surrounding quotes, or `accessToken=` prefix. Nothing will appear as you paste; that is expected.
+4. In the browser's cookie table, find the row named `accessToken`. Copy its complete **Value**, paste it into the `accessToken cookie (hidden):` terminal prompt, and press Enter. Copy only the value, without the cookie name, surrounding quotes, or `accessToken=` prefix. Asterisks appear as you type or paste to show that your input was received while keeping the cookie value hidden.
 5. If the cookie table also contains `httpOnlyToken`, copy its value into the second prompt and press Enter. If that cookie is absent, leave the prompt blank and press Enter. Use the cookies from your Planka site, not your Google account. If `accessToken` is missing, confirm you are signed into Planka, reload the page, and check the selected site again.
 6. After setup succeeds, run `plankton doctor` to check the connection. You can then use your agent as shown above.
 

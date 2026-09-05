@@ -29,7 +29,7 @@ To reuse a session from your usual browser without signing in again, or if brows
 plankton login https://your-planka.example --manual
 ```
 
-The hidden prompts accept the `accessToken` cookie and, when present, the `httpOnlyToken` cookie from your signed-in Planka browser session. Leave the second prompt blank if that cookie is absent. Manual login still requires an available OS credential vault. Never paste cookies into assistant chat or pass them as command arguments.
+The prompts display asterisks as you type or paste. They accept the `accessToken` cookie and, when present, the `httpOnlyToken` cookie from your signed-in Planka browser session. Leave the second prompt blank if that cookie is absent. Manual login still requires an available OS credential vault. Never paste cookies into assistant chat or pass them as command arguments.
 
 Follow the [manual setup instructions](../README.md#manual-setup-with-cookies) to find and copy these values in your browser. `setup --manual` and `login --manual` use the same process and do not download or open a browser.
 

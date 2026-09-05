@@ -4,7 +4,7 @@ export const entitySchema = z
   .object({
     id,
     name: z.string().optional(),
-    username: z.string().optional(),
+    username: z.string().nullable().optional(),
     projectId: id.optional(),
     boardId: id.optional(),
     listId: id.optional(),

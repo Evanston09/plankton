@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+- Accept nullable usernames in core entity validation so accounts without a username verify successfully.
+- Mask manual cookie prompts with asterisks while keeping cookie values out of arguments and chat.
+- Revise manual setup instructions to describe the masked prompts and cookie copy flow.
+
 ## 0.2.0 — CLI release
 
 - Add the standalone CLI in `packages/cli` for browsing and updating Planka boards, cards and checklists.

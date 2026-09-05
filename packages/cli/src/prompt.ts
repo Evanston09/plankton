@@ -10,7 +10,7 @@ export async function ask(prompt: string, secret = false) {
   }
   return (
     await (secret ? password : input)(
-      { message: prompt },
+      { message: prompt, ...(secret ? { mask: "*" } : {}) },
       { output: process.stderr },
     )
   ).trim();
