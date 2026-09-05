@@ -5,6 +5,7 @@ import {
   PlanktonError,
   sessionSchema,
   type Session,
+  type ClientOptions,
 } from "@evanston/plankton-core";
 const connectionSchema = z
   .object({ url: z.string(), session: sessionSchema })
@@ -70,7 +71,10 @@ export class KeyringStore implements CredentialStore {
   }
 }
 
-export async function connectedClient(store: CredentialStore) {
+export async function connectedClient(
+  store: CredentialStore,
+  options: Pick<ClientOptions, "debug"> = {},
+) {
   const connection = await store.read();
   if (!connection) {
     throw new PlanktonError(
@@ -78,7 +82,7 @@ export async function connectedClient(store: CredentialStore) {
       "No active connection. Run plankton setup.",
     );
   }
-  return new PlankaClient(connection);
+  return new PlankaClient({ ...connection, ...options });
 }
 
 export async function saveValidatedConnection(

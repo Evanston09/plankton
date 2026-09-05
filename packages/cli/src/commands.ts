@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import {
   Command,
   CommanderError,
@@ -18,6 +19,10 @@ import {
   saveValidatedConnection,
 } from "./storage.js";
 import { compactResult, printResult } from "./output.js";
+
+const cliPackage = createRequire(import.meta.url)("../package.json") as {
+  version: string;
+};
 
 function integer(min: number, max: number) {
   return (value: string) => {
@@ -120,7 +125,8 @@ export async function runCli(argv: string[]) {
   const program = new Command()
     .name("plankton")
     .description("Browse and update Planka boards, cards and checklists")
-    .version("0.2.1")
+    .version(cliPackage.version)
+    .option("--debug", "Print sanitized request diagnostics on stderr")
     .option("--json", "Machine-readable results on stdout, errors on stderr")
     .addHelpCommand()
     .exitOverride()
@@ -133,7 +139,11 @@ export async function runCli(argv: string[]) {
   ) => {
     // Validate before accessing the vault or making any requests.
     const parsed = operationSchemas[operation].parse(input);
-    const client = await connectedClient(new KeyringStore());
+    const client = await connectedClient(new KeyringStore(), {
+      debug: program.opts().debug
+        ? (details) => console.error(JSON.stringify({ debug: details }))
+        : undefined,
+    });
     const data = await client.execute(operation, parsed);
     printResult(
       compactResult(data, {
@@ -201,7 +211,11 @@ export async function runCli(argv: string[]) {
     .description("Check the credential vault and Planka account")
     .action(async () => {
       const account = await (
-        await connectedClient(new KeyringStore())
+        await connectedClient(new KeyringStore(), {
+          debug: program.opts().debug
+            ? (details) => console.error(JSON.stringify({ debug: details }))
+            : undefined,
+        })
       ).account();
       printResult(
         { account, node: process.version, platform: process.platform },
@@ -243,19 +257,51 @@ export async function runCli(argv: string[]) {
   const cards = program
     .command("cards")
     .description("Find, read, create, edit and move cards");
-  cards
-    .command("find")
-    .description("Search titles within a board; narrow the query if truncated")
-    .requiredOption("--board <reference>", "Board name, ID or link")
-    .requiredOption("--query <text>", "Case-insensitive title substring")
-    .option("--limit <count>", "Maximum matches (1–100)", integer(1, 100), 25)
-    .action((o) =>
+  for (const command of ["list", "find"]) {
+    page(
+      cards
+        .command(command)
+        .description(
+          command === "list"
+            ? "List cards within a board"
+            : "Search card titles within a board",
+        )
+        .requiredOption("--board <reference>", "Board name, ID or link")
+        .option("--list <reference>", "Filter by list name or ID")
+        .option(
+          "--query <text>",
+          "Case-insensitive title substring; omitted or empty lists all cards",
+        ),
+    ).action((o) =>
       execute(
         "find_cards",
-        { board: o.board, query: o.query, limit: o.limit },
+        {
+          board: o.board,
+          list: o.list,
+          query: o.query,
+          limit: o.limit,
+          offset: o.offset,
+        },
         o,
       ),
     );
+  }
+  for (const command of ["archive", "delete"] as const) {
+    cardScope(
+      cards
+        .command(`${command} <card>`)
+        .description(
+          command === "archive"
+            ? "Move a card to its board archive"
+            : "Permanently delete a card",
+        ),
+    ).action((card, o) =>
+      execute(command === "archive" ? "archive_card" : "delete_card", {
+        card,
+        board: o.board,
+      }),
+    );
+  }
   page(
     cardScope(
       cards
@@ -375,12 +421,16 @@ export async function runCli(argv: string[]) {
         position: o.position,
       }),
     );
-  taskScope(
+  cardScope(
     tasks
       .command("complete <task>")
       .description("Complete a task, or reopen it with --undo"),
   )
-    .requiredOption("--checklist <reference>", "Checklist name or ID")
+    .option(
+      "--card <reference>",
+      "Parent card; required for task names or scope checks",
+    )
+    .option("--checklist <reference>", "Checklist name or ID within --card")
     .option("--undo", "Mark incomplete")
     .action((task, o) =>
       execute("complete_task", {
@@ -391,6 +441,25 @@ export async function runCli(argv: string[]) {
         isCompleted: !o.undo,
       }),
     );
+  taskScope(
+    checklists
+      .command("delete <checklist>")
+      .description("Permanently delete a checklist and its tasks"),
+  ).action((taskList, o) =>
+    execute("delete_task_list", { card: o.card, board: o.board, taskList }),
+  );
+  taskScope(
+    tasks.command("delete <task>").description("Permanently delete a task"),
+  )
+    .requiredOption("--checklist <reference>", "Checklist name or ID")
+    .action((task, o) =>
+      execute("delete_task", {
+        card: o.card,
+        board: o.board,
+        taskList: o.checklist,
+        task,
+      }),
+    );
   for (const group of [projects, boards, lists, cards, checklists, tasks])
     group.action(() => group.outputHelp());
   program.action(() => program.outputHelp());
@@ -399,7 +468,10 @@ export async function runCli(argv: string[]) {
   } catch (error) {
     if (error instanceof CommanderError) {
       if (error.exitCode === 0) return;
-      throw new PlanktonError("VALIDATION", error.message);
+      throw new PlanktonError(
+        error.code === "commander.invalidArgument" ? "VALIDATION" : "USAGE",
+        error.message.replace(/^error: /, ""),
+      );
     }
     throw error;
   }

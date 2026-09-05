@@ -6,27 +6,32 @@ Run `plankton --help`, `plankton <group> --help`, or `plankton <group> <command>
 
 ## Commands
 
-| Command                       | Required inputs                         | Optional inputs                                               |
-| ----------------------------- | --------------------------------------- | ------------------------------------------------------------- |
-| `projects list`               | —                                       | `--limit`, `--offset`                                         |
-| `boards list`                 | —                                       | `--project`, `--limit`, `--offset`                            |
-| `lists list`                  | `--board`                               | `--limit`, `--offset`                                         |
-| `cards find`                  | `--board`, `--query`                    | `--limit`                                                     |
-| `cards get <card>`            | card reference                          | `--board`, `--limit`, `--offset`                              |
-| `cards create`                | `--board`, `--list`, `--name`           | description input, `--type`, `--position`                     |
-| `cards edit <card>`           | card reference and at least one change  | `--board`, `--name`, description input, `--clear-description` |
-| `cards move <card>`           | card reference, `--list`                | `--board`, `--to-board`, `--position`                         |
-| `checklists list`             | `--card`                                | `--board`, `--limit`, `--offset`                              |
-| `checklists create`           | `--card`, `--name`                      | `--board`, `--position`                                       |
-| `checklists edit <checklist>` | checklist reference, `--card`, `--name` | `--board`                                                     |
-| `tasks add`                   | `--card`, `--checklist`, `--name`       | `--board`, `--position`                                       |
-| `tasks complete <task>`       | task reference, `--card`, `--checklist` | `--board`, `--undo`                                           |
+| Command                                        | Required inputs                         | Optional inputs                                               |
+| ---------------------------------------------- | --------------------------------------- | ------------------------------------------------------------- |
+| `projects list`                                | —                                       | `--limit`, `--offset`                                         |
+| `boards list`                                  | —                                       | `--project`, `--limit`, `--offset`                            |
+| `lists list`                                   | `--board`                               | `--limit`, `--offset`                                         |
+| `cards list` / `cards find`                    | `--board`                               | `--query`, `--list`, `--limit`, `--offset`                    |
+| `cards archive <card>` / `cards delete <card>` | card reference                          | `--board`                                                     |
+| `cards get <card>`                             | card reference                          | `--board`, `--limit`, `--offset`                              |
+| `cards create`                                 | `--board`, `--list`, `--name`           | description input, `--type`, `--position`                     |
+| `cards edit <card>`                            | card reference and at least one change  | `--board`, `--name`, description input, `--clear-description` |
+| `cards move <card>`                            | card reference, `--list`                | `--board`, `--to-board`, `--position`                         |
+| `checklists list`                              | `--card`                                | `--board`, `--limit`, `--offset`                              |
+| `checklists create`                            | `--card`, `--name`                      | `--board`, `--position`                                       |
+| `checklists edit <checklist>`                  | checklist reference, `--card`, `--name` | `--board`                                                     |
+| `tasks add`                                    | `--card`, `--checklist`, `--name`       | `--board`, `--position`                                       |
+| `tasks complete <task>`                        | task ID, or name with `--card`          | `--card`, `--checklist`, `--board`, `--undo`                  |
+| `checklists delete <checklist>`                | checklist reference, `--card`           | `--board`                                                     |
+| `tasks delete <task>`                          | task reference, `--card`, `--checklist` | `--board`                                                     |
 
 `--board` scopes a card name; card IDs and same-instance card links do not require it. Project and board references accept names, IDs or same-instance links. List, checklist and task references accept names or IDs within their parent scope. Use quotes around names with spaces. IDs are strings.
 
-`cards find` matches title substrings, case-insensitively. Direct name resolution requires an exact case-insensitive match. Duplicate names return `AMBIGUOUS` with compact choices, capped at 25 with truncation disclosed. The agent can select an ID from context or obtain more detail before deciding whether clarification is needed. Exact name resolution is independent of the display search limit: a unique exact match can resolve even when a substring search would exceed 100 matches. An incomplete underlying board scan cannot safely establish a unique name match.
+`cards list` and `cards find` match title substrings case-insensitively; an omitted or empty query enumerates cards. `--list` restricts results to one list. Direct name resolution requires an exact case-insensitive match. Duplicate names return `AMBIGUOUS` with compact choices, capped at 25 with truncation disclosed. The agent can select an ID from context or obtain more detail before deciding whether clarification is needed. Exact name resolution is independent of the display search limit: a unique exact match can resolve even when a substring search would exceed 100 matches. An incomplete underlying board scan cannot safely establish a unique name match.
 
 Moves default to the card's current board. `--to-board` changes the destination board; `--board` identifies the source when using a card name. Positions default to `65535`. Card type defaults to `project`; `story` is also supported. Creating/moving into trash is excluded.
+
+Card links accept both `/cards/<id>` and the web UI’s `/boards/<boardId>/cards/<id>` under the active instance path. Archive moves a card to its board’s archive list; restore it with `cards move`. Delete commands permanently remove their targets; deleting a checklist also removes its tasks. Task completion by bare ID sends one update; supplying scope requires `--card` and validates membership before writing.
 
 ## Descriptions
 
@@ -49,7 +54,7 @@ Collections and write results contain selected summary fields: ID, name, parent 
 
 Browse/checklist collections default to **25 rows**, with `--limit 1..100`. Each collection is paged independently using `--offset` (default 0). `data.paging.<collection>` reports the collection's `total` and, when more rows remain, `nextOffset`. `data.truncated` is true if any collection has further rows. An offset beyond the end returns an empty collection. Pagination is over the current response, not a persistent snapshot; concurrent board changes may shift rows.
 
-`cards find` returns at most `--limit` matches and a `truncated` flag, without offsets or an exact total. Narrow the query, raise the limit, or use a known ID/link when truncated. Archive/trash scans are bounded to ten pages per endless list; truncation can mean the scan is incomplete even if fewer than the requested number of matches were returned.
+Card list/find results include `paging.items.total`, optional `nextOffset`, and `complete`. The total counts discovered matches; it is exhaustive only when `complete` is true. Archive/trash scans are bounded to ten pages per selected endless list. `truncated` means more output remains or the scan is incomplete. Offsets cannot recover cards beyond the scan cap; use a known ID or narrow to a list.
 
 ## Setup and recovery
 
@@ -59,16 +64,21 @@ Browse/checklist collections default to **25 rows**, with `--limit 1..100`. Each
 - `logout`: remove saved credentials without revoking the server session.
 - `install-browser`: install Chromium explicitly.
 
-| Error code        | Recovery                                                                  |
-| ----------------- | ------------------------------------------------------------------------- |
-| `VALIDATION`      | Correct inputs using command help. No retry with unchanged arguments.     |
+| Error code        | Recovery                                                                                           |
+| ----------------- | -------------------------------------------------------------------------------------------------- |
+| `USAGE`           | Fix command syntax, missing options, or conflicting flags using help.                              |
+| `VALIDATION`      | Correct inputs using command help. No retry with unchanged arguments.                              |
 | `AUTHENTICATION`  | Direct the user to run setup/login in their own terminal; see [authentication](authentication.md). |
-| `STORAGE`         | Make the OS credential vault available and unlock it.                     |
-| `LOGIN`           | Resolve browser/display prerequisites or use manual login in a terminal.  |
-| `AMBIGUOUS`       | Resolve intent using returned choices and context, then pass an ID.       |
-| `NOT_FOUND`       | Check the reference and parent scope.                                     |
-| `PERMISSION`      | The signed-in Planka account lacks permission.                            |
-| `NETWORK` / `API` | Check connectivity and `doctor`; inspect the error message.               |
-| `UNCERTAIN_WRITE` | Read current state before retrying; the write may already have succeeded. |
+| `STORAGE`         | Make the OS credential vault available and unlock it.                                              |
+| `LOGIN`           | Resolve browser/display prerequisites or use manual login in a terminal.                           |
+| `AMBIGUOUS`       | Resolve intent using returned choices and context, then pass an ID.                                |
+| `NOT_FOUND`       | Check the reference and parent scope.                                                              |
+| `PERMISSION`      | The signed-in Planka account lacks permission.                                                     |
+| `NETWORK` / `API` | Check connectivity and `doctor`; inspect the error message.                                        |
+| `UNCERTAIN_WRITE` | Read current state before retrying; the write may already have succeeded.                          |
 
 There is no multi-operation transaction or automatic write retry. If the agent executes several commands and one fails, earlier successful commands remain applied.
+
+Use `--debug` for sanitized request method, endpoint, status, phase and duration records on stderr. With debug enabled, stderr may contain multiple JSON lines. Headers, credentials and response bodies are omitted. API response errors include failing schema field paths; `NETWORK` denotes transport failures.
+
+Board-wide card listing, search, and name resolution cover active/closed lists from the board response. Archive and trash are excluded unless selected explicitly with `cards list/find --list <id>`. Explicit endless-list scans remain bounded and report errors rather than silently skipping failed pages. `complete` describes the selected scope. Use card IDs or links to access archived/trashed cards directly.

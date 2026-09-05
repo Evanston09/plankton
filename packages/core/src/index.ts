@@ -9,3 +9,5 @@ export {
   type OperationResult,
   type OperationResults,
 } from "./schemas.js";
+
+export type { ClientOptions } from "./transport.js";

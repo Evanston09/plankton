@@ -82,7 +82,7 @@ it.each([
     const { api } = client([response]);
     await expect(
       api.execute("find_cards", { board: "10", query: "Example" }),
-    ).rejects.toMatchObject({ code: "NETWORK" });
+    ).rejects.toMatchObject({ code: "API" });
   },
 );
 
@@ -95,14 +95,14 @@ it("rejects a missing endless-list page instead of treating it as scan completio
     {},
   ]);
   await expect(
-    api.execute("find_cards", { board: "10", query: "Example" }),
-  ).rejects.toMatchObject({ code: "NETWORK" });
+    api.execute("find_cards", { board: "10", list: "22", query: "Example" }),
+  ).rejects.toMatchObject({ code: "API" });
 });
 
 it("requires checklist collections in card responses", async () => {
   const { api } = client([{ item: { id: "30" } }]);
   await expect(api.execute("read_card", { card: "30" })).rejects.toMatchObject({
-    code: "NETWORK",
+    code: "API",
   });
 });
 
@@ -114,7 +114,7 @@ it("validates collection responses independently of the request path", async () 
   });
   await expect(
     transport.request("arbitrary-collection", itemsResponseSchema),
-  ).rejects.toMatchObject({ code: "NETWORK" });
+  ).rejects.toMatchObject({ code: "API" });
 });
 
 it("preserves write uncertainty for invalid relationship fields", async () => {
@@ -222,7 +222,7 @@ describe("rc.4 API contracts", () => {
     ).rejects.toMatchObject({ code: "VALIDATION" });
     expect(requests).toHaveLength(0);
   });
-  it("searches finite cards and paginates endless lists", async () => {
+  it("paginates an explicitly selected endless list", async () => {
     const { api, requests } = client([
       {
         ...board,
@@ -235,6 +235,7 @@ describe("rc.4 API contracts", () => {
         items: [
           {
             id: "32",
+            listId: "22",
             name: "Example archived",
             listChangedAt: "2025-01-01T00:00:00Z",
           },
@@ -243,20 +244,27 @@ describe("rc.4 API contracts", () => {
       { items: [] },
     ]);
     expect(
-      await api.execute("find_cards", { board: "10", query: "Example" }),
-    ).toMatchObject({ items: [{ id: "30" }, { id: "32" }], truncated: false });
+      await api.execute("find_cards", {
+        board: "10",
+        list: "22",
+        query: "Example",
+      }),
+    ).toMatchObject({ items: [{ id: "32" }], truncated: false });
     expect(requests).toHaveLength(3);
     expect(requests[2]?.url).toContain("before=");
   });
-  it("reports incomplete results and refuses ambiguous incomplete name resolution", async () => {
+  it("reports incomplete explicitly selected endless-list scans", async () => {
     const data = {
       ...board,
       included: { ...board.included, lists: [{ id: "22", type: "archive" }] },
     };
-    const { api } = client([data, { items: [{ id: "32", name: "Example" }] }]);
-    await expect(
-      api.execute("read_card", { card: "Example", board: "10" }),
-    ).rejects.toMatchObject({ code: "VALIDATION" });
+    const { api } = client([
+      data,
+      { items: [{ id: "32", listId: "22", name: "Example" }] },
+    ]);
+    expect(
+      await api.execute("find_cards", { board: "10", list: "22" }),
+    ).toMatchObject({ complete: false, truncated: true });
   });
   it("scopes task completion to the selected card and checklist", async () => {
     const { api, requests } = client([
@@ -432,3 +440,249 @@ it.each([
     });
   },
 );
+
+it("accepts nullable archive/trash fields and pages filtered cards", async () => {
+  const snapshot = {
+    ...board,
+    included: {
+      ...board.included,
+      lists: [
+        ...board.included.lists,
+        { id: "22", name: null, position: null, type: "archive" },
+      ],
+      cards: [
+        ...board.included.cards,
+        { id: "31", name: "Second", listId: "20" },
+      ],
+    },
+  };
+  const { api, requests } = client([snapshot, snapshot]);
+  expect((await api.execute("lists", { board: "10" })).items).toHaveLength(3);
+  expect(
+    await api.execute("find_cards", {
+      board: "10",
+      list: "Todo",
+      offset: 1,
+      limit: 1,
+    }),
+  ).toMatchObject({
+    items: [{ id: "31" }],
+    complete: true,
+    truncated: false,
+    paging: { items: { total: 2 } },
+  });
+  expect(requests).toHaveLength(2);
+});
+
+it("accepts and emits nested same-instance card links", async () => {
+  const { api, requests } = client([
+    {
+      item: { id: "30", boardId: "10" },
+      included: { taskLists: [], tasks: [] },
+    },
+  ]);
+  expect(
+    await api.execute("read_card", {
+      card: "https://planka.example/sub/boards/10/cards/30",
+    }),
+  ).toMatchObject({
+    item: { url: "https://planka.example/sub/boards/10/cards/30" },
+  });
+  expect(requests[0]?.url).toMatch(/api\/cards\/30$/);
+});
+
+it("completes a bare task ID in one request", async () => {
+  const { api, requests } = client([{ item: { id: "50", isCompleted: true } }]);
+  await api.execute("complete_task", { task: "50" });
+  expect(requests).toHaveLength(1);
+  expect(requests[0]).toMatchObject({
+    url: "https://planka.example/sub/api/tasks/50",
+    init: { method: "PATCH", body: '{"isCompleted":true}' },
+  });
+});
+
+it("archives a card using the archive list", async () => {
+  const { api, requests } = client([
+    {
+      item: { id: "30", boardId: "10" },
+      included: { taskLists: [], tasks: [] },
+    },
+    {
+      ...board,
+      included: {
+        ...board.included,
+        lists: [{ id: "22", type: "archive", name: null, position: null }],
+      },
+    },
+    { item: { id: "30", boardId: "10", listId: "22" } },
+  ]);
+  await api.execute("archive_card", { card: "30" });
+  expect(requests[2]?.init).toMatchObject({
+    method: "PATCH",
+    body: '{"listId":"22"}',
+  });
+});
+
+it.each([
+  ["delete_card", "cards/30"],
+  ["delete_task_list", "task-lists/40"],
+  ["delete_task", "tasks/50"],
+] as const)("dispatches %s without retrying", async (operation, path) => {
+  const { api, requests } = client([
+    {
+      item: { id: "30" },
+      included: {
+        taskLists: [{ id: "40", name: "Checklist" }],
+        tasks: [{ id: "50", name: "Task", taskListId: "40" }],
+      },
+    },
+    { item: { id: path.split("/")[1] } },
+  ]);
+  await api.execute(
+    operation,
+    operation === "delete_card"
+      ? { card: "30" }
+      : operation === "delete_task_list"
+        ? { card: "30", taskList: "40" }
+        : { card: "30", taskList: "40", task: "50" },
+  );
+  expect(requests[1]).toMatchObject({
+    url: `https://planka.example/sub/api/${path}`,
+    init: { method: "DELETE" },
+  });
+});
+
+it("reports schema paths and sanitized debug metadata", async () => {
+  const debug = vi.fn();
+  const transport = new PlankaTransport({
+    url: "https://planka.example",
+    session: { accessToken: "secret" },
+    debug,
+    fetch: vi
+      .fn()
+      .mockResolvedValue(
+        Response.json({ items: [{ id: 12, name: "private content" }] }),
+      ),
+  });
+  const result = await transport
+    .request("boards/10", itemsResponseSchema)
+    .catch(errorResult);
+  expect(result).toMatchObject({
+    error: {
+      code: "API",
+      details: { status: 200, phase: "schema", fields: ["items.0.id"] },
+    },
+  });
+  expect(JSON.stringify([result, debug.mock.calls])).not.toMatch(
+    /secret|private content/,
+  );
+});
+
+it("adds project names to ambiguous board choices", async () => {
+  const { api } = client([
+    {
+      items: [
+        { id: "1", name: "Alpha" },
+        { id: "2", name: "Beta" },
+      ],
+      included: {
+        boards: [
+          { id: "10", name: "Board", projectId: "1" },
+          { id: "11", name: "Board", projectId: "2" },
+        ],
+      },
+    },
+  ]);
+  await expect(api.execute("lists", { board: "Board" })).rejects.toMatchObject({
+    code: "AMBIGUOUS",
+    details: { choices: [{ projectName: "Alpha" }, { projectName: "Beta" }] },
+  });
+});
+
+it("preserves network failure classification", async () => {
+  const { api } = client([new TypeError("secret")]);
+  await expect(api.execute("projects", {})).rejects.toMatchObject({
+    code: "NETWORK",
+    details: { phase: "network", endpoint: "projects" },
+  });
+});
+
+it("hints when a missing card ID identifies an accessible board", async () => {
+  const { api } = client([
+    new Response(null, { status: 404 }),
+    { items: [], included: { boards: [{ id: "10", name: "Board" }] } },
+  ]);
+  await expect(api.execute("read_card", { card: "10" })).rejects.toMatchObject({
+    code: "NOT_FOUND",
+    details: { boardId: "10" },
+    message: expect.stringContaining("--board"),
+  });
+});
+
+it("refuses task completion outside supplied checklist scope", async () => {
+  const { api, requests } = client([
+    {
+      item: { id: "30" },
+      included: {
+        taskLists: [{ id: "40" }],
+        tasks: [{ id: "50", taskListId: "41" }],
+      },
+    },
+  ]);
+  await expect(
+    api.execute("complete_task", { task: "50", card: "30", taskList: "40" }),
+  ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  expect(requests).toHaveLength(1);
+});
+
+it("lists, searches and resolves names without requesting archive or trash", async () => {
+  const snapshot = {
+    ...board,
+    included: {
+      ...board.included,
+      lists: [
+        ...board.included.lists,
+        { id: "22", type: "archive", name: null, position: null },
+        { id: "23", type: "trash", name: null, position: null },
+      ],
+    },
+  };
+  const { api, requests } = client([
+    snapshot,
+    snapshot,
+    snapshot,
+    { item: board.included.cards[0], included: { taskLists: [], tasks: [] } },
+  ]);
+  expect(await api.execute("find_cards", { board: "10" })).toMatchObject({
+    items: [{ id: "30" }],
+    complete: true,
+  });
+  expect(
+    await api.execute("find_cards", { board: "10", query: "Exam" }),
+  ).toMatchObject({ items: [{ id: "30" }], complete: true });
+  expect(
+    await api.execute("read_card", { card: "Example", board: "10" }),
+  ).toMatchObject({ item: { id: "30" } });
+  expect(requests.map((r) => r.url)).toEqual([
+    "https://planka.example/sub/api/boards/10",
+    "https://planka.example/sub/api/boards/10",
+    "https://planka.example/sub/api/boards/10",
+    "https://planka.example/sub/api/cards/30",
+  ]);
+});
+
+it("preserves errors from explicitly selected archive lists", async () => {
+  const { api } = client([
+    {
+      ...board,
+      included: { ...board.included, lists: [{ id: "22", type: "archive" }] },
+    },
+    new Response(null, { status: 400 }),
+  ]);
+  await expect(
+    api.execute("find_cards", { board: "10", list: "22" }),
+  ).rejects.toMatchObject({
+    code: "VALIDATION",
+    details: { status: 400, endpoint: "lists/22/cards" },
+  });
+});

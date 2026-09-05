@@ -2,6 +2,7 @@ import { z } from "zod";
 export type ErrorCode =
   | "AUTHENTICATION"
   | "PERMISSION"
+  | "USAGE"
   | "VALIDATION"
   | "NOT_FOUND"
   | "AMBIGUOUS"

@@ -3,7 +3,7 @@ const id = z.string().regex(/^\d+$/);
 export const entitySchema = z
   .object({
     id,
-    name: z.string().optional(),
+    name: z.string().nullable().optional(),
     username: z.string().nullable().optional(),
     projectId: id.optional(),
     boardId: id.optional(),
@@ -14,7 +14,7 @@ export const entitySchema = z
     listChangedAt: z.string().nullable().optional(),
     description: z.string().nullable().optional(),
     isCompleted: z.boolean().optional(),
-    position: z.number().finite().optional(),
+    position: z.number().finite().nullable().optional(),
   })
   .catchall(z.unknown());
 export type Entity = z.infer<typeof entitySchema>;
@@ -38,7 +38,11 @@ export const cardResponseSchema = itemResponseSchema.extend({
 export type CardResponse = z.infer<typeof cardResponseSchema>;
 
 export type CollectionResult = { items: Entity[] };
-export type SearchResult = CollectionResult & { truncated: boolean };
+export type SearchResult = CollectionResult & {
+  truncated: boolean;
+  complete: boolean;
+  paging: { items: { total: number; nextOffset?: number } };
+};
 export type ItemResult = { item: Entity; url?: string };
 export type CardResult = ItemResult & { taskLists: Entity[]; tasks: Entity[] };
 export type TaskListsResult = CollectionResult & {
@@ -59,6 +63,10 @@ export interface OperationResults {
   edit_task_list: ItemResult;
   add_task: ItemResult;
   complete_task: ItemResult;
+  archive_card: ItemResult;
+  delete_card: ItemResult;
+  delete_task_list: ItemResult;
+  delete_task: ItemResult;
 }
 export type OperationResult = OperationResults[Operation];
 const ref = z.string().trim().min(1).max(2048);
@@ -72,7 +80,14 @@ export const operationSchemas = {
   find_cards: z
     .object({
       board: ref,
-      query: z.string().trim().min(1).max(128),
+      query: z.string().trim().max(128).default(""),
+      list: ref.optional(),
+      offset: z
+        .number()
+        .int()
+        .nonnegative()
+        .max(Number.MAX_SAFE_INTEGER)
+        .default(0),
       limit: z.number().int().min(1).max(100).default(25),
     })
     .strict(),
@@ -120,15 +135,32 @@ export const operationSchemas = {
   add_task: z
     .object({ card: ref, board: ref.optional(), taskList: ref, name, position })
     .strict(),
+  archive_card: z.object({ card: ref, board: ref.optional() }).strict(),
+  delete_card: z.object({ card: ref, board: ref.optional() }).strict(),
+  delete_task_list: z
+    .object({ card: ref, board: ref.optional(), taskList: ref })
+    .strict(),
+  delete_task: z
+    .object({ card: ref, board: ref.optional(), taskList: ref, task: ref })
+    .strict(),
   complete_task: z
     .object({
-      card: ref,
+      card: ref.optional(),
       board: ref.optional(),
-      taskList: ref,
+      taskList: ref.optional(),
       task: ref,
       isCompleted: z.boolean().default(true),
     })
-    .strict(),
+    .strict()
+    .refine(
+      (v) =>
+        Boolean(v.card) || (!v.board && !v.taskList && /^\d+$/.test(v.task)),
+      {
+        message:
+          "Supply --card for task names or scope checks, or use a bare task ID.",
+        path: ["card"],
+      },
+    ),
 };
 export type Operation = keyof typeof operationSchemas;
 export type OperationInput<K extends Operation> = z.input<

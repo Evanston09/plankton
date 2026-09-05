@@ -12,6 +12,14 @@ export function referenceId(
   if (/^https?:\/\//i.test(value)) {
     const url = new URL(value);
     const base = new URL(baseUrl);
+    if (kind === "cards" && url.origin === base.origin) {
+      const root = base.pathname.replace(/\/$/, "");
+      const path = url.pathname.slice(root.length);
+      const match =
+        url.pathname.startsWith(`${root}/`) &&
+        /^\/boards\/\d+\/cards\/(\d+)$/.exec(path);
+      if (match) return match[1];
+    }
     const prefix = `${base.pathname.replace(/\/$/, "")}/${kind}/`;
     if (
       url.origin !== base.origin ||
@@ -56,6 +64,7 @@ export function resolveReference(
                 "id",
                 "name",
                 "projectId",
+                "projectName",
                 "boardId",
                 "boardName",
                 "listId",

@@ -1,8 +1,12 @@
+import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { expect, it } from "vitest";
 
 const cli = resolve("packages/cli/dist/cli.js");
+const cliPackage = JSON.parse(
+  readFileSync("packages/cli/package.json", "utf8"),
+) as { version: string };
 const run = (...args: string[]) => {
   const result = spawnSync(process.execPath, [cli, ...args], {
     encoding: "utf8",
@@ -34,7 +38,7 @@ it.each([
 it.each(["--version", "-V"])("prints the version with %s", (flag) => {
   const result = run(flag);
   expect(result.status).toBe(0);
-  expect(result.stdout.trim()).toBe("0.2.1");
+  expect(result.stdout.trim()).toBe(cliPackage.version);
   expect(result.stderr).toBe("");
 });
 
@@ -63,7 +67,7 @@ it.each([
   expect(result.stdout).toBe("");
   expect(JSON.parse(result.stderr)).toMatchObject({
     ok: false,
-    error: { code: "VALIDATION" },
+    error: { code: expect.stringMatching(/^(USAGE|VALIDATION)$/) },
   });
 });
 
@@ -71,7 +75,7 @@ it("prints readable errors by default", () => {
   const result = run("cards", "find");
   expect(result.status).toBe(1);
   expect(result.stdout).toBe("");
-  expect(result.stderr).toContain("code: VALIDATION");
+  expect(result.stderr).toContain("code: USAGE");
 });
 
 it.each(["projects", "boards", "lists", "cards", "checklists", "tasks"])(

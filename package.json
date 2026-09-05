@@ -15,6 +15,7 @@
     "plankton": "node packages/cli/dist/cli.js"
   },
   "devDependencies": {
+    "@changesets/cli": "^3.0.2",
     "@types/node": "^22.0.0",
     "prettier": "3.9.6",
     "typescript": "^5.9.0",

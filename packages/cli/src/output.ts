@@ -9,6 +9,7 @@ const fields = [
   "name",
   "username",
   "projectId",
+  "projectName",
   "boardId",
   "boardName",
   "listId",
@@ -37,6 +38,9 @@ export function compactResult(
     return {
       items: data.items.map((row) => summary(row)),
       truncated: data.truncated,
+      ...("complete" in data
+        ? { complete: data.complete, paging: data.paging }
+        : {}),
     };
   }
   const result: Record<string, unknown> = {};

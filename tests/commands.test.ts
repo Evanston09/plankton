@@ -89,7 +89,7 @@ it("finds compact contextual matches, reads details and moves using the current 
           id: "30",
           boardName: "Robot",
           listName: "Todo",
-          url: "https://planka.example/cards/30",
+          url: "https://planka.example/boards/10/cards/30",
         },
       ],
       truncated: false,
@@ -336,4 +336,49 @@ it("includes descriptions only in card details and preserves checklist links", (
     paging: { items: { total: 0 }, tasks: { total: 0 } },
     truncated: false,
   });
+});
+
+it("lists cards with CLI offsets and optional queries", async () => {
+  responseQueue = [board, board];
+  await runCli([
+    "cards",
+    "list",
+    "--board",
+    "10",
+    "--list",
+    "Todo",
+    "--offset",
+    "1",
+    "--json",
+  ]);
+  expect(output()).toMatchObject({
+    data: { items: [], complete: true, paging: { items: { total: 1 } } },
+  });
+  await runCli(["cards", "find", "--board", "10", "--query", "", "--json"]);
+  expect(output().data.items).toHaveLength(1);
+});
+
+it("completes bare task IDs and rejects unscoped names before credentials", async () => {
+  responseQueue = [{ item: { id: "50", isCompleted: false } }];
+  await runCli(["tasks", "complete", "50", "--undo", "--json"]);
+  expect(requests).toEqual([
+    {
+      path: "https://planka.example/api/tasks/50",
+      method: "PATCH",
+      body: { isCompleted: false },
+    },
+  ]);
+  mocks.connect.mockClear();
+  await expect(runCli(["tasks", "complete", "Task"])).rejects.toThrow();
+  expect(mocks.connect).not.toHaveBeenCalled();
+});
+
+it("classifies syntax errors separately from invalid input values", async () => {
+  await expect(runCli(["cards", "unknown"])).rejects.toMatchObject({
+    code: "USAGE",
+    message: expect.not.stringMatching(/^error:/),
+  });
+  await expect(
+    runCli(["cards", "list", "--board", "10", "--limit", "0"]),
+  ).rejects.toMatchObject({ code: "VALIDATION" });
 });

@@ -1,12 +1,13 @@
 import { PlanktonError } from "./errors.js";
 import { normalizeUrl, sessionSchema, type Session } from "./session.js";
-import type { z } from "zod";
+import { z } from "zod";
 
 export interface ClientOptions {
   url: string;
   session: Session;
   fetch?: typeof fetch;
   timeoutMs?: number;
+  debug?: (details: Record<string, unknown>) => void;
 }
 
 export class PlankaTransport {
@@ -14,8 +15,10 @@ export class PlankaTransport {
   private readonly session: Session;
   private readonly fetcher: typeof fetch;
   private readonly timeoutMs: number;
+  private readonly debug?: ClientOptions["debug"];
 
   constructor(options: ClientOptions) {
+    this.debug = options.debug;
     this.url = normalizeUrl(options.url);
     this.session = sessionSchema.parse(options.session);
     this.fetcher = options.fetch ?? fetch;
@@ -29,6 +32,10 @@ export class PlankaTransport {
     body?: unknown,
   ): Promise<T> {
     const write = method !== "GET";
+    let status: number | undefined;
+    let phase = "network";
+    const endpoint = path.split("?")[0];
+    const started = Date.now();
     try {
       const response = await this.fetcher(`${this.url}/api/${path}`, {
         method,
@@ -44,6 +51,8 @@ export class PlankaTransport {
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
+      status = response.status;
+      phase = "response";
       if (response.status === 401) {
         throw new PlanktonError(
           "AUTHENTICATION",
@@ -77,17 +86,40 @@ export class PlankaTransport {
           { status: response.status },
         );
       }
-      return schema.parse(await response.json());
+      phase = "json";
+      const payload = await response.json();
+      phase = "schema";
+      return schema.parse(payload);
     } catch (error) {
       if (error instanceof PlanktonError) {
+        error.details = { ...error.details, status, endpoint, method };
         throw error;
       }
       throw new PlanktonError(
-        write ? "UNCERTAIN_WRITE" : "NETWORK",
+        write ? "UNCERTAIN_WRITE" : phase === "network" ? "NETWORK" : "API",
         write
           ? "The write outcome is unknown. Read the resource before retrying; do not repeat the write blindly."
-          : "Could not read Planka. Check the URL, network and server response.",
+          : phase === "network"
+            ? "Could not reach Planka. Check the connection or timeout."
+            : "Planka returned an invalid API response.",
+        {
+          status,
+          endpoint,
+          method,
+          phase,
+          ...(error instanceof z.ZodError
+            ? { fields: error.issues.map((i) => i.path.join(".")) }
+            : {}),
+        },
       );
+    } finally {
+      this.debug?.({
+        method,
+        endpoint,
+        status,
+        phase,
+        durationMs: Date.now() - started,
+      });
     }
   }
 }
