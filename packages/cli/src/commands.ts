@@ -339,7 +339,18 @@ export async function runCli(argv: string[]) {
     cardScope(
       cards
         .command("edit <card>")
-        .description("Change title or description")
+        .description("Change title, description or due date")
+        .addOption(
+          new Option(
+            "--due-date <datetime>",
+            "Due date as ISO 8601 with timezone, e.g. 2026-09-10T17:00:00Z",
+          ).conflicts("clearDueDate"),
+        )
+        .addOption(
+          new Option("--clear-due-date", "Clear the card due date").conflicts(
+            "dueDate",
+          ),
+        )
         .option("--name <text>", "New card title"),
     ),
     true,
@@ -349,6 +360,7 @@ export async function runCli(argv: string[]) {
       board: o.board,
       name: o.name,
       description: await description(o),
+      dueDate: o.clearDueDate ? null : o.dueDate,
     }),
   );
   cardScope(
@@ -371,6 +383,47 @@ export async function runCli(argv: string[]) {
         position: o.position,
       }),
     );
+
+  for (const command of ["add-label", "remove-label"] as const) {
+    cardScope(
+      cards
+        .command(`${command} <card>`)
+        .description(
+          command === "add-label"
+            ? "Add an existing board label to a card"
+            : "Remove a label from a card",
+        ),
+    )
+      .requiredOption("--label <reference>", "Label name or ID")
+      .action((card, o) =>
+        execute(
+          command === "add-label" ? "add_card_label" : "remove_card_label",
+          { card, board: o.board, label: o.label },
+        ),
+      );
+  }
+  for (const command of ["assign", "unassign"] as const) {
+    cardScope(
+      cards
+        .command(`${command} <card>`)
+        .description(
+          command === "assign"
+            ? "Assign a board member to a card"
+            : "Unassign a card member",
+        ),
+    )
+      .requiredOption(
+        "--member <reference>",
+        "Member display name, @username or user ID",
+      )
+      .action((card, o) =>
+        execute(command === "assign" ? "assign_card" : "unassign_card", {
+          card,
+          board: o.board,
+          member: o.member,
+        }),
+      );
+  }
 
   const checklists = program
     .command("checklists")

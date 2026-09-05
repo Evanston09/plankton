@@ -9,6 +9,9 @@ export const entitySchema = z
     boardId: id.optional(),
     listId: id.optional(),
     cardId: id.optional(),
+    labelId: id.optional(),
+    userId: id.optional(),
+    dueDate: z.string().nullable().optional(),
     taskListId: id.optional(),
     type: z.string().optional(),
     listChangedAt: z.string().nullable().optional(),
@@ -27,6 +30,9 @@ export const boardResponseSchema = itemResponseSchema.extend({
   included: z.object({
     lists: z.array(entitySchema),
     cards: z.array(entitySchema),
+    labels: z.array(entitySchema).optional(),
+    users: z.array(entitySchema).optional(),
+    boardMemberships: z.array(entitySchema.extend({ userId: id })).optional(),
   }),
 });
 export const cardResponseSchema = itemResponseSchema.extend({
@@ -57,6 +63,10 @@ export interface OperationResults {
   read_card: CardResult;
   create_card: ItemResult;
   edit_card: ItemResult;
+  add_card_label: ItemResult;
+  remove_card_label: ItemResult;
+  assign_card: ItemResult;
+  unassign_card: ItemResult;
   move_card: ItemResult;
   task_lists: TaskListsResult;
   create_task_list: ItemResult;
@@ -108,9 +118,31 @@ export const operationSchemas = {
       board: ref.optional(),
       name: name.optional(),
       description: description.optional(),
+      dueDate: z.iso
+        .datetime({ offset: true })
+        .transform((value) => new Date(value).toISOString())
+        .nullable()
+        .optional(),
     })
     .strict()
-    .refine((v) => v.name !== undefined || v.description !== undefined),
+    .refine(
+      (v) =>
+        v.name !== undefined ||
+        v.description !== undefined ||
+        v.dueDate !== undefined,
+    ),
+  add_card_label: z
+    .object({ card: ref, board: ref.optional(), label: ref })
+    .strict(),
+  remove_card_label: z
+    .object({ card: ref, board: ref.optional(), label: ref })
+    .strict(),
+  assign_card: z
+    .object({ card: ref, board: ref.optional(), member: ref })
+    .strict(),
+  unassign_card: z
+    .object({ card: ref, board: ref.optional(), member: ref })
+    .strict(),
   move_card: z
     .object({
       card: ref,

@@ -367,8 +367,65 @@ export class PlankaClient {
         const item = await this.writeItem(`cards/${card.id}`, "PATCH", {
           name: args.name,
           description: args.description,
+          dueDate: args.dueDate,
         });
         return { item: this.link(item) };
+      }
+      case "add_card_label":
+      case "remove_card_label":
+      case "assign_card":
+      case "unassign_card": {
+        const isLabel =
+          args.operation === "add_card_label" ||
+          args.operation === "remove_card_label";
+        const value = "label" in args ? args.label : args.member;
+        let id = referenceId(this.url, value, isLabel ? "labels" : "users");
+        if (!id) {
+          const boardRef = card.boardId ?? args.board;
+          if (!boardRef)
+            throw new PlanktonError(
+              "VALIDATION",
+              "Supply --board to resolve a label or member name.",
+            );
+          const board = await this.board(boardRef);
+          let items = board.included.labels;
+          if (!isLabel) {
+            const { users, boardMemberships } = board.included;
+            if (!users || !boardMemberships)
+              throw new PlanktonError(
+                "API",
+                "Board response is missing users or board memberships.",
+              );
+            items = users.filter((user) =>
+              boardMemberships.some((member) => member.userId === user.id),
+            );
+          }
+          if (!items)
+            throw new PlanktonError("API", "Board response is missing labels.");
+          // @username explicitly selects usernames; other names use display names.
+          if (!isLabel && value.startsWith("@")) {
+            items = items.map((user) => ({ ...user, name: user.username }));
+          }
+          id = resolveReference(
+            this.url,
+            !isLabel && value.startsWith("@") ? value.slice(1) : value,
+            items,
+            isLabel ? "labels" : "users",
+          ).id;
+        }
+        const remove =
+          args.operation === "remove_card_label" ||
+          args.operation === "unassign_card";
+        const collection = isLabel ? "card-labels" : "card-memberships";
+        const key = isLabel ? "labelId" : "userId";
+        return {
+          item: await this.writeItem(
+            `cards/${card.id}/${collection}${remove ? `/${key}:${id}` : ""}`,
+            remove ? "DELETE" : "POST",
+            remove ? undefined : { [key]: id },
+          ),
+          url,
+        };
       }
       case "move_card": {
         const destination = args.destinationBoard ?? card.boardId ?? args.board;

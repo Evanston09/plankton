@@ -382,3 +382,147 @@ it("classifies syntax errors separately from invalid input values", async () => 
     runCli(["cards", "list", "--board", "10", "--limit", "0"]),
   ).rejects.toMatchObject({ code: "VALIDATION" });
 });
+
+it.each([
+  ["2026-09-10T17:00:00Z", "2026-09-10T17:00:00.000Z"],
+  ["2026-09-10T17:00:00-04:00", "2026-09-10T21:00:00.000Z"],
+  [null, null],
+])("sets or clears a due date: %s", async (input, dueDate) => {
+  responseQueue = [details, { item: { ...card, dueDate } }];
+  await runCli([
+    "cards",
+    "edit",
+    "30",
+    ...(input ? ["--due-date", input] : ["--clear-due-date"]),
+    "--json",
+  ]);
+  expect(requests.at(-1)).toMatchObject({ method: "PATCH", body: { dueDate } });
+  expect(requests.at(-1)?.body).toEqual({ dueDate });
+  expect(output().data.item.dueDate).toBe(dueDate);
+});
+
+it.each([
+  ["--due-date", "tomorrow"],
+  ["--due-date", "2026-02-30T12:00:00Z"],
+  ["--due-date", "2026-09-10T12:00:00"],
+  ["--due-date", "2026-09-10T12:00:00Z", "--clear-due-date"],
+])(
+  "rejects invalid or conflicting due date input before credentials: %s",
+  async (...flags) => {
+    await expect(runCli(["cards", "edit", "30", ...flags])).rejects.toThrow();
+    expect(mocks.connect).not.toHaveBeenCalled();
+  },
+);
+
+const assignmentsBoard = {
+  ...board,
+  included: {
+    ...board.included,
+    labels: [{ id: "60", name: "Urgent" }],
+    users: [
+      { id: "70", name: "Alex", username: "alex" },
+      { id: "71", name: "Former member" },
+    ],
+    boardMemberships: [{ id: "80", userId: "70" }],
+  },
+};
+
+it.each([
+  ["add-label", "--label", "Urgent", "card-labels", "labelId", "60", "POST"],
+  [
+    "remove-label",
+    "--label",
+    "Urgent",
+    "card-labels/labelId:60",
+    "labelId",
+    "60",
+    "DELETE",
+  ],
+  ["assign", "--member", "Alex", "card-memberships", "userId", "70", "POST"],
+  ["assign", "--member", "@alex", "card-memberships", "userId", "70", "POST"],
+  [
+    "unassign",
+    "--member",
+    "Alex",
+    "card-memberships/userId:70",
+    "userId",
+    "70",
+    "DELETE",
+  ],
+])(
+  "executes cards %s with a scoped name",
+  async (command, flag, value, path, key, id, method) => {
+    responseQueue = [
+      details,
+      assignmentsBoard,
+      { item: { id: "90", cardId: "30", [key]: id } },
+    ];
+    await runCli(["cards", command, "30", flag, value, "--json"]);
+    expect(requests.at(-1)).toEqual({
+      path: `https://planka.example/api/cards/30/${path}`,
+      method,
+      body: method === "POST" ? { [key]: id } : undefined,
+    });
+    expect(output().data).toMatchObject({
+      item: { cardId: "30", [key]: id },
+      url: "https://planka.example/boards/10/cards/30",
+    });
+  },
+);
+
+it.each([
+  ["add-label", "--label", "60", "card-labels", "labelId", "POST"],
+  [
+    "remove-label",
+    "--label",
+    "60",
+    "card-labels/labelId:60",
+    "labelId",
+    "DELETE",
+  ],
+  ["assign", "--member", "70", "card-memberships", "userId", "POST"],
+  [
+    "unassign",
+    "--member",
+    "70",
+    "card-memberships/userId:70",
+    "userId",
+    "DELETE",
+  ],
+])(
+  "executes cards %s using IDs without board discovery",
+  async (command, flag, id, path, key, method) => {
+    responseQueue = [details, { item: { id: "90", cardId: "30", [key]: id } }];
+    await runCli(["cards", command, "30", flag, id, "--json"]);
+    expect(requests).toHaveLength(2);
+    expect(requests.at(-1)).toEqual({
+      path: `https://planka.example/api/cards/30/${path}`,
+      method,
+      body: method === "POST" ? { [key]: id } : undefined,
+    });
+  },
+);
+
+it("rejects ambiguous labels and nonmembers without writing", async () => {
+  responseQueue = [
+    details,
+    {
+      ...assignmentsBoard,
+      included: {
+        ...assignmentsBoard.included,
+        labels: [
+          { id: "60", name: "Urgent" },
+          { id: "61", name: "Urgent" },
+        ],
+      },
+    },
+  ];
+  await expect(
+    runCli(["cards", "add-label", "30", "--label", "Urgent"]),
+  ).rejects.toMatchObject({ code: "AMBIGUOUS" });
+  responseQueue = [details, assignmentsBoard];
+  await expect(
+    runCli(["cards", "assign", "30", "--member", "Former member"]),
+  ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  expect(requests.every((request) => request.method === "GET")).toBe(true);
+});

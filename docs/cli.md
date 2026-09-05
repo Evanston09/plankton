@@ -33,6 +33,21 @@ Moves default to the card's current board. `--to-board` changes the destination 
 
 Card links accept both `/cards/<id>` and the web UI’s `/boards/<boardId>/cards/<id>` under the active instance path. Archive moves a card to its board’s archive list; restore it with `cards move`. Delete commands permanently remove their targets; deleting a checklist also removes its tasks. Task completion by bare ID sends one update; supplying scope requires `--card` and validates membership before writing.
 
+## Due dates, labels and members
+
+```sh
+plankton cards edit 123 --due-date '2026-09-10T17:00:00-04:00'
+plankton cards edit 123 --clear-due-date
+plankton cards add-label 123 --label 'Urgent'
+plankton cards remove-label 123 --label 'Urgent'
+plankton cards assign 123 --member '@alex'
+plankton cards unassign 123 --member '@alex'
+```
+
+Due dates require an ISO 8601 timestamp with `Z` or an explicit timezone offset and are normalized to UTC. Setting and clearing are mutually exclusive; omitting both leaves the due date unchanged. Card output includes `dueDate` when returned by the server.
+
+Labels accept an existing board label's name or ID. Members accept a display name, `@username`, or user ID. Names resolve within the card's current board; duplicate names require an ID. Add `--board <reference>` when addressing a card by name. Removing a label detaches it from the card; unassigning removes card membership. These commands do not delete board labels or board members. Results include the affected `labelId` or `userId` and a card link. Each command changes one label or member and supports `--json`.
+
 ## Descriptions
 
 Use one of `--description <text>` or `--description-file <path>`. With `--description-file -`, UTF-8 content is read from piped stdin. Edits also support `--clear-description`; these three options are mutually exclusive. Omitting a description leaves it unchanged on edit. Empty descriptions are rejected; clear explicitly instead. Maximum length is 1,048,576 characters.
