@@ -15,22 +15,46 @@ Requires [Node.js 22+](https://nodejs.org/) and a Planka account.
 
    For the agent skill, select **Global** if you want to use Plankton anywhere, then select the agents you want to add it to.
 
-2. Open your agent and connect to Planka:
+2. Connect to Planka in your own terminal:
 
-   - Codex: `$plankton Connect to https://your-planka.example`
-   - Claude Code: `/plankton Connect to https://your-planka.example`
+   ```sh
+   plankton setup https://your-planka.example
+   ```
 
-   Plankton opens a browser window for sign-in, including SSO, and stores the connection in your operating system's credential vault. Chromium may be downloaded the first time. Your password is never entered in chat.
+   Replace the example URL with your team's Planka address. Setup opens a separate browser that does not share your usual browser's sign-in. You will need to sign into Planka again, including Google or your other SSO provider if you use one. Chromium may be downloaded the first time.
 
-3. Ask for what you need:
+   To reuse an existing Planka login instead, follow [manual setup with cookies](#manual-setup-with-cookies) below. Both methods save the connection in your operating system's credential vault.
 
-   > Find the intake card on the Robot board and move it to In Progress.
+3. Open your agent and ask for what you need:
+
+   - Codex: `$plankton Find the intake card on the Robot board and move it to In Progress.`
+   - Claude Code: `/plankton Find the intake card on the Robot board and move it to In Progress.`
+
+   Then continue with requests such as:
 
    > Add a checklist named Release to the launch card.
 
    > Show me the incomplete tasks on the motor controller card.
 
 You only need to invoke Plankton once per conversation. After that, continue asking normally.
+
+## Manual setup with cookies
+
+Use this option if you are already signed into Planka in your usual browser and want to avoid signing in again. Cookies act as credentials: paste them only into Plankton's hidden terminal prompts, never into agent chat or command arguments.
+
+1. Open your team's Planka site in your usual browser and confirm you can see your boards.
+2. Right-click the page and choose **Inspect** to open developer tools. In Chrome, select **Application** (it may be under the **»** overflow menu), then expand **Cookies** under **Storage** and select your Planka site's address. In Firefox, select the **Storage** tab, expand **Cookies**, and select your Planka site. See the [Chrome](https://developer.chrome.com/docs/devtools/application/cookies/) or [Firefox](https://firefox-source-docs.mozilla.org/devtools-user/storage_inspector/cookies/) cookie guide for screenshots and details.
+3. In your own terminal, run:
+
+   ```sh
+   plankton setup https://your-planka.example --manual
+   ```
+
+4. In the browser's cookie table, find the row named `accessToken`. Copy its complete **Value**, paste it into the `accessToken cookie (hidden):` terminal prompt, and press Enter. Copy only the value, without the cookie name, surrounding quotes, or `accessToken=` prefix. Nothing will appear as you paste; that is expected.
+5. If the cookie table also contains `httpOnlyToken`, copy its value into the second prompt and press Enter. If that cookie is absent, leave the prompt blank and press Enter. Use the cookies from your Planka site, not your Google account. If `accessToken` is missing, confirm you are signed into Planka, reload the page, and check the selected site again.
+6. After setup succeeds, run `plankton doctor` to check the connection. You can then use your agent as shown above.
+
+Manual setup does not download or open another browser. When the saved session expires, run setup again using either method.
 
 ## Direct CLI use
 

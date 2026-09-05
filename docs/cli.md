@@ -62,7 +62,7 @@ Browse/checklist collections default to **25 rows**, with `--limit 1..100`. Each
 | Error code        | Recovery                                                                  |
 | ----------------- | ------------------------------------------------------------------------- |
 | `VALIDATION`      | Correct inputs using command help. No retry with unchanged arguments.     |
-| `AUTHENTICATION`  | Agent may run setup/login and guide the user through browser sign-in.     |
+| `AUTHENTICATION`  | Direct the user to run setup/login in their own terminal; see [authentication](authentication.md). |
 | `STORAGE`         | Make the OS credential vault available and unlock it.                     |
 | `LOGIN`           | Resolve browser/display prerequisites or use manual login in a terminal.  |
 | `AMBIGUOUS`       | Resolve intent using returned choices and context, then pass an ID.       |

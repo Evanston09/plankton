@@ -7,9 +7,9 @@ plankton setup https://your-planka.example
 plankton doctor --json
 ```
 
-Setup downloads Chromium if it is missing and opens a separate browser window. Complete your normal Planka sign-in there, including SSO when your instance supports it. Plankton validates the session, saves it in your native OS credential vault, and closes the window. Browser sign-in waits up to five minutes. Production SSO compatibility still needs live verification.
+Run setup in your own terminal before using the agent. Setup downloads Chromium if it is missing and opens a separate browser window that does not share your usual browser's sign-in. You will need to sign into Planka again, including Google or your other SSO provider when applicable. Plankton validates the session, saves it in your native OS credential vault, and closes the window. Browser sign-in waits up to five minutes. Production SSO compatibility still needs live verification.
 
-With the URL supplied, setup needs no terminal prompts, so an assistant can launch it while you sign in. `plankton login` reuses the saved URL. Ordinary board/card commands call the API without opening a browser.
+`plankton login` reuses the saved URL. Ordinary board/card commands call the API without opening a browser.
 
 Use HTTPS for remote instances; HTTP is accepted only for localhost, 127.0.0.1 and ::1. Include any deployment subpath in the URL. Do not include credentials, a query or a fragment.
 
@@ -23,13 +23,15 @@ Credentials are stored as one active connection in the OS vault. No plaintext fa
 
 ## Manual login
 
-If browser login is unavailable, run this in your own interactive terminal:
+To reuse a session from your usual browser without signing in again, or if browser login is unavailable, run this in your own interactive terminal:
 
 ```sh
 plankton login https://your-planka.example --manual
 ```
 
 The hidden prompts accept the `accessToken` cookie and, when present, the `httpOnlyToken` cookie from your signed-in Planka browser session. Leave the second prompt blank if that cookie is absent. Manual login still requires an available OS credential vault. Never paste cookies into assistant chat or pass them as command arguments.
+
+Follow the [manual setup instructions](../README.md#manual-setup-with-cookies) to find and copy these values in your browser. `setup --manual` and `login --manual` use the same process and do not download or open a browser.
 
 ## Recovery
 

@@ -8,7 +8,7 @@ Use the local `plankton` CLI for Planka requests. Once invoked, keep using it fo
 
 Discover commands with `plankton --help` and `<group> <command> --help`. Use `--json`: stdout contains `{ok:true,data}`, stderr contains `{ok:false,error}`, and failures exit 1. Run individual commands as needed to complete the request.
 
-For missing or expired login, run `plankton setup <URL>` or `plankton login`. Ask for the instance URL only if unknown. These open browser sign-in without terminal prompts when the URL is supplied or saved. Tell the user to sign in in that window and wait for the process. Never request credentials in chat or pass them as command arguments. Manual cookie import is for the user's own terminal.
+For missing or expired login, direct the user to complete `plankton setup <URL>` or `plankton login` in their own terminal before continuing Planka requests. Link to the [setup instructions](https://github.com/Evanston09/plankton#quick-start), which cover signing in again in a separate browser or manually importing an existing Planka session. Never request credentials in chat or pass them as command arguments.
 
 Search/list results are compact. Use `cards get` for descriptions and checklists. Follow `paging.<collection>.nextOffset` with `--offset`; narrow truncated card searches. Use `--description-file <path>` (or `-` for piped stdin) for long descriptions.
 
