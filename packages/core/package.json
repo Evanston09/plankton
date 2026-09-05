@@ -1,7 +1,7 @@
 {
   "author": "Evan Kim",
   "name": "@evanston/plankton-core",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Local Planka integration core",
   "type": "module",
   "license": "MIT",
