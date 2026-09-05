@@ -1,0 +1,72 @@
+# CLI reference
+
+Run `plankton --help`, `plankton <group> --help`, or `plankton <group> <command> --help` for focused help. Discovery requires no credentials and does not load a browser. `--json` is a global option accepted before or after the command. Help and version output remain text.
+
+## Commands
+
+| Command                       | Required inputs                         | Optional inputs                                               |
+| ----------------------------- | --------------------------------------- | ------------------------------------------------------------- |
+| `projects list`               | —                                       | `--limit`, `--offset`                                         |
+| `boards list`                 | —                                       | `--project`, `--limit`, `--offset`                            |
+| `lists list`                  | `--board`                               | `--limit`, `--offset`                                         |
+| `cards find`                  | `--board`, `--query`                    | `--limit`                                                     |
+| `cards get <card>`            | card reference                          | `--board`, `--limit`, `--offset`                              |
+| `cards create`                | `--board`, `--list`, `--name`           | description input, `--type`, `--position`                     |
+| `cards edit <card>`           | card reference and at least one change  | `--board`, `--name`, description input, `--clear-description` |
+| `cards move <card>`           | card reference, `--list`                | `--board`, `--to-board`, `--position`                         |
+| `checklists list`             | `--card`                                | `--board`, `--limit`, `--offset`                              |
+| `checklists create`           | `--card`, `--name`                      | `--board`, `--position`                                       |
+| `checklists edit <checklist>` | checklist reference, `--card`, `--name` | `--board`                                                     |
+| `tasks add`                   | `--card`, `--checklist`, `--name`       | `--board`, `--position`                                       |
+| `tasks complete <task>`       | task reference, `--card`, `--checklist` | `--board`, `--undo`                                           |
+
+`--board` scopes a card name; card IDs and same-instance card links do not require it. Project and board references accept names, IDs or same-instance links. List, checklist and task references accept names or IDs within their parent scope. Use quotes around names with spaces. IDs are strings.
+
+`cards find` matches title substrings, case-insensitively. Direct name resolution requires an exact case-insensitive match. Duplicate names return `AMBIGUOUS` with compact choices, capped at 25 with truncation disclosed. The agent can select an ID from context or obtain more detail before deciding whether clarification is needed. Incomplete search results cannot safely establish a unique name match.
+
+Moves default to the card's current board. `--to-board` changes the destination board; `--board` identifies the source when using a card name. Positions default to `65535`. Card type defaults to `project`; `story` is also supported. Creating/moving into trash is excluded.
+
+## Descriptions
+
+Use one of `--description <text>` or `--description-file <path>`. With `--description-file -`, UTF-8 content is read from piped stdin. Edits also support `--clear-description`; these three options are mutually exclusive. Omitting a description leaves it unchanged on edit. Empty descriptions are rejected; clear explicitly instead. Maximum length is 1,048,576 characters.
+
+```sh
+plankton cards create --board Robot --list Todo --name "Test intake" --description-file notes.md --json
+plankton cards edit 123 --description-file - --json < notes.md
+plankton cards edit 123 --clear-description --json
+plankton tasks complete 456 --card 123 --checklist 789 --undo --json
+```
+
+## Output and bounds
+
+Success exits **0**, with one `{ "ok": true, "data": ... }` JSON object on stdout in JSON mode. Failure exits **1**, with one `{ "ok": false, "error": { "code", "message", "details"? } }` object on stderr. Ordinary operation commands never prompt. Setup progress and browser-install logs go to stderr; final setup success remains a single object on stdout.
+
+Text mode shows labeled fields. Control characters and line breaks in field values are escaped so terminal output cannot execute escape sequences. JSON mode preserves the original field strings through JSON decoding.
+
+Collections and write results contain selected summary fields: ID, name, parent IDs, type, position, completion state and links where available. Card searches also include board/list names when available. `cards get` adds the description and checklist/task collections. `checklists list` returns checklist and task collections plus the parent card link. Writes return the affected item and its card link where applicable.
+
+Browse/checklist collections default to **25 rows**, with `--limit 1..100`. Each collection is paged independently using `--offset` (default 0). `data.paging.<collection>` reports the collection's `total` and, when more rows remain, `nextOffset`. `data.truncated` is true if any collection has further rows. An offset beyond the end returns an empty collection. Pagination is over the current response, not a persistent snapshot; concurrent board changes may shift rows.
+
+`cards find` returns at most `--limit` matches and a `truncated` flag, without offsets or an exact total. Narrow the query, raise the limit, or use a known ID/link when truncated. Archive/trash scans are bounded to ten pages per endless list; truncation can mean the scan is incomplete even if fewer than the requested number of matches were returned.
+
+## Setup and recovery
+
+- `setup [URL]` / `login [URL]`: reuse the saved URL or accept it as an argument. Download missing Chromium and open sign-in. Browser sign-in times out after five minutes. Without a saved URL, interactive terminals ask for one; noninteractive calls return an actionable error.
+- `setup [URL] --manual` / `login [URL] --manual`: hidden cookie prompts in the user's terminal; no browser download. Credentials never belong in chat or CLI arguments.
+- `doctor`: verify credential-vault access and the active Planka account.
+- `logout`: remove saved credentials without revoking the server session.
+- `install-browser`: install Chromium explicitly.
+
+| Error code        | Recovery                                                                  |
+| ----------------- | ------------------------------------------------------------------------- |
+| `VALIDATION`      | Correct inputs using command help. No retry with unchanged arguments.     |
+| `AUTHENTICATION`  | Agent may run setup/login and guide the user through browser sign-in.     |
+| `STORAGE`         | Make the OS credential vault available and unlock it.                     |
+| `LOGIN`           | Resolve browser/display prerequisites or use manual login in a terminal.  |
+| `AMBIGUOUS`       | Resolve intent using returned choices and context, then pass an ID.       |
+| `NOT_FOUND`       | Check the reference and parent scope.                                     |
+| `PERMISSION`      | The signed-in Planka account lacks permission.                            |
+| `NETWORK` / `API` | Check connectivity and `doctor`; inspect the error message.               |
+| `UNCERTAIN_WRITE` | Read current state before retrying; the write may already have succeeded. |
+
+There is no multi-operation transaction or automatic write retry. If the agent executes several commands and one fails, earlier successful commands remain applied.

@@ -1,0 +1,22 @@
+{
+  "author": "Evan Kim",
+  "name": "plankton-workspace",
+  "private": true,
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm build && vitest run",
+    "check": "pnpm test && pnpm typecheck",
+    "plankton": "node packages/cli/dist/cli.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "prettier": "3.9.6",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}
