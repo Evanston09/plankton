@@ -1,5 +1,13 @@
 # @evanston/plankton
 
+## 0.3.3
+
+### Patch Changes
+
+- 40c05ae: Add consistent card assignment details to list, find, and get results; search card descriptions, labels, and assignees; and support repeatable member and label changes, including assignments during card creation.
+- Updated dependencies [40c05ae]
+  - @evanston/plankton-core@0.3.3
+
 ## 0.3.2
 
 ### Patch Changes
