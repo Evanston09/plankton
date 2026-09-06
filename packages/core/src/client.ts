@@ -1,4 +1,5 @@
 import { PlanktonError } from "./errors.js";
+import { CardContext } from "./card-context.js";
 import { referenceId, resolveReference } from "./references.js";
 import {
   operationSchemas,
@@ -10,6 +11,7 @@ import {
   itemsResponseSchema,
   projectsResponseSchema,
   type CardResponse,
+  type BoardResponse,
   type OperationResult,
   type OperationResults,
   type Operation,
@@ -56,10 +58,9 @@ export class PlankaClient {
     return data;
   }
 
-  private boardMembers(included: {
-    users?: Entity[];
-    boardMemberships?: Entity[];
-  }) {
+  private boardMembers(
+    included: Pick<BoardResponse["included"], "users" | "boardMemberships">,
+  ) {
     const { users, boardMemberships } = included;
     if (!users || !boardMemberships)
       throw new PlanktonError(
@@ -90,6 +91,8 @@ export class PlankaClient {
   }
 
   private async card(value: string, board?: string) {
+    let context: CardContext | undefined;
+    let contextReference = board;
     let id = referenceId(this.url, value, "cards");
     if (!id) {
       if (!board) {
@@ -98,17 +101,38 @@ export class PlankaClient {
           "Supply a board to resolve a card name, or use a card ID/link.",
         );
       }
-      const found = await this.collectCards(board);
-      if (!found.complete) {
-        throw new PlanktonError(
-          "VALIDATION",
-          "Card search is incomplete. Use a card ID/link to avoid resolving the wrong card.",
-        );
-      }
-      id = resolveReference(this.url, value, found.items, "cards").id;
+      // Name resolution covers the finite board snapshot, never endless lists.
+      const discovered = new CardContext(this.url, await this.board(board));
+      context = discovered;
+      id = resolveReference(
+        this.url,
+        value,
+        discovered.board.included.cards.map((card) =>
+          discovered.describe(card),
+        ),
+        "cards",
+      ).id;
     }
     try {
-      return await this.transport.request(`cards/${id}`, cardResponseSchema);
+      const data = await this.transport.request(
+        `cards/${id}`,
+        cardResponseSchema,
+      );
+      return {
+        data,
+        context: async (reference: string) => {
+          if (
+            !context ||
+            (reference !== contextReference &&
+              referenceId(this.url, reference, "boards") !==
+                context.board.item.id)
+          ) {
+            context = new CardContext(this.url, await this.board(reference));
+            contextReference = reference;
+          }
+          return context;
+        },
+      };
     } catch (error) {
       if (error instanceof PlanktonError && error.code === "NOT_FOUND") {
         const projects = await this.transport
@@ -153,48 +177,10 @@ export class PlankaClient {
     return { id: item.id, name: item.name, username: item.username };
   }
 
-  private cardSummary(
-    card: Entity,
-    board: Awaited<ReturnType<PlankaClient["board"]>>,
-    included: { cardMemberships: Entity[]; cardLabels: Entity[] },
-  ) {
-    const members = included.cardMemberships
-      .filter((row) => row.cardId === card.id)
-      .map((row) => {
-        const user = board.included.users?.find(
-          (user) => user.id === row.userId,
-        );
-        return { id: row.userId!, name: user?.name, username: user?.username };
-      });
-    const labels = included.cardLabels
-      .filter((row) => row.cardId === card.id)
-      .map((row) => {
-        const label = board.included.labels?.find(
-          (label) => label.id === row.labelId,
-        );
-        return { id: row.labelId!, name: label?.name, color: label?.color };
-      });
-    return this.link({
-      ...card,
-      boardId: card.boardId ?? board.item.id,
-      boardName: board.item.name,
-      listName: board.included.lists.find((list) => list.id === card.listId)
-        ?.name,
-      members,
-      labels,
-      memberIds: members.map((row) => row.id),
-      labelIds: labels.map((row) => row.id),
-    });
-  }
-
   private resolveAssociations(
     values: string[],
     isLabel: boolean,
-    included?: {
-      labels?: Entity[];
-      users?: Entity[];
-      boardMemberships?: Entity[];
-    },
+    included?: BoardResponse["included"],
   ) {
     return [
       ...new Set(
@@ -206,7 +192,7 @@ export class PlankaClient {
               "VALIDATION",
               "Supply --board to resolve a label or member name.",
             );
-          return resolveReference(
+          return resolveReference<Entity>(
             this.url,
             !isLabel && value.startsWith("@") ? value.slice(1) : value,
             isLabel ? this.boardLabels(included) : this.boardMembers(included),
@@ -312,9 +298,10 @@ export class PlankaClient {
       }
     }
     return {
-      items: [...cards.values()]
-        .filter((c) => !listId || c.listId === listId)
-        .map((c) => this.cardSummary(c, data, included)),
+      items: new CardContext(this.url, data).summarize(
+        [...cards.values()].filter((c) => !listId || c.listId === listId),
+        included,
+      ),
       complete,
     };
   }
@@ -389,7 +376,7 @@ export class PlankaClient {
           "VALIDATION",
           "Supply --card to resolve or check task scope, or use a bare task ID without scope.",
         );
-      const data = await this.card(args.card, args.board);
+      const { data } = await this.card(args.card, args.board);
       const taskList = args.taskList
         ? resolveReference(
             this.url,
@@ -518,7 +505,7 @@ export class PlankaClient {
   }
 
   private async executeCard(args: Extract<ParsedOperation, { card: string }>) {
-    const data = await this.card(args.card, args.board);
+    const { data, context } = await this.card(args.card, args.board);
     const card = data.item;
     const url = this.link(card).url;
 
@@ -526,7 +513,7 @@ export class PlankaClient {
       case "delete_card":
         return { item: await this.writeItem(`cards/${card.id}`, "DELETE") };
       case "archive_card": {
-        const board = await this.board(card.boardId ?? args.board ?? "");
+        const { board } = await context(card.boardId ?? args.board ?? "");
         const archives = board.included.lists.filter(
           (l) => l.type === "archive",
         );
@@ -550,9 +537,9 @@ export class PlankaClient {
             "API",
             "Card response is missing its board ID.",
           );
-        const board = await this.board(boardRef);
+        const snapshot = await context(boardRef);
         return {
-          item: this.cardSummary(card, board, data.included),
+          item: snapshot.summarize([card], data.included)[0]!,
           taskLists: data.included.taskLists,
           tasks: data.included.tasks,
         };
@@ -580,7 +567,7 @@ export class PlankaClient {
         );
         const boardRef = card.boardId ?? args.board;
         const board =
-          needsBoard && boardRef ? await this.board(boardRef) : undefined;
+          needsBoard && boardRef ? (await context(boardRef)).board : undefined;
         const ids = this.resolveAssociations(values, isLabel, board?.included);
         const remove =
           args.operation === "remove_card_label" ||
@@ -600,7 +587,7 @@ export class PlankaClient {
             "VALIDATION",
             "Cannot determine the current board. Supply --to-board.",
           );
-        const board = await this.board(destination);
+        const { board } = await context(destination);
         const list = resolveReference(
           this.url,
           args.list,

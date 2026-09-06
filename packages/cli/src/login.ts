@@ -1,6 +1,6 @@
 import { setTimeout as delay } from "node:timers/promises";
 import {
-  PlankaClient,
+  type PlankaClient,
   PlanktonError,
   normalizeUrl,
   sessionSchema,
@@ -25,8 +25,9 @@ export function sessionFromCookies(
 
 export async function browserLogin(
   value: string,
+  verify: (session: Session) => ReturnType<PlankaClient["account"]>,
   timeoutMs = 300000,
-): Promise<Session> {
+) {
   const url = normalizeUrl(value);
   const { chromium } = await import("playwright");
   const browser = await chromium.launch({ headless: false }).catch(() => {
@@ -35,6 +36,7 @@ export async function browserLogin(
       "Could not open Chromium. Run plankton install-browser, then retry with a desktop display available; or use plankton login --manual.",
     );
   });
+  let verified = false;
   try {
     const context = await browser.newContext();
     const page = await context.newPage();
@@ -49,8 +51,9 @@ export async function browserLogin(
       if (session && JSON.stringify(session) !== lastAttempt) {
         lastAttempt = JSON.stringify(session);
         try {
-          await new PlankaClient({ url, session }).account();
-          return session;
+          const account = await verify(session);
+          verified = true;
+          return { session, account };
         } catch (e) {
           if (!(e instanceof PlanktonError) || e.code !== "AUTHENTICATION") {
             throw e;
@@ -72,6 +75,15 @@ export async function browserLogin(
       "Browser login failed. Retry or use plankton login --manual.",
     );
   } finally {
-    await browser.close();
+    try {
+      await browser.close();
+    } catch {
+      // Preserve the original failure; never expose a raw browser error.
+      if (verified)
+        throw new PlanktonError(
+          "LOGIN",
+          "Could not close the login browser. Close it and retry login.",
+        );
+    }
   }
 }

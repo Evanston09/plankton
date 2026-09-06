@@ -57,21 +57,32 @@ export const cardResponseSchema = itemResponseSchema.extend({
   }),
 });
 export type CardResponse = z.infer<typeof cardResponseSchema>;
+export type BoardResponse = z.infer<typeof boardResponseSchema>;
+export type CardAssociations = Pick<
+  CardResponse["included"],
+  "cardMemberships" | "cardLabels"
+>;
+export type CardSummary = Entity & {
+  url: string;
+  boardId: string;
+  boardName: Entity["name"];
+  listName: Entity["name"];
+  members: Pick<Entity, "id" | "name" | "username">[];
+  labels: (Pick<Entity, "id" | "name"> & { color: unknown })[];
+  memberIds: string[];
+  labelIds: string[];
+};
 
 export type CollectionResult = { items: Entity[] };
-export type SearchResult = CollectionResult & {
+export type SearchResult = {
+  items: CardSummary[];
   truncated: boolean;
   complete: boolean;
   paging: { items: { total: number; nextOffset?: number } };
 };
 export type ItemResult = { item: Entity; url?: string };
 export type CardResult = {
-  item: Entity & {
-    members: Entity[];
-    labels: Entity[];
-    memberIds: string[];
-    labelIds: string[];
-  };
+  item: CardSummary;
   taskLists: Entity[];
   tasks: Entity[];
 };

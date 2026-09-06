@@ -2,6 +2,8 @@ import {
   errorResult,
   type Entity,
   type OperationResult,
+  type Operation,
+  type OperationResults,
 } from "@evanston/plankton-core";
 
 const fields = [
@@ -39,20 +41,30 @@ function summary(row: Entity, details = false): Record<string, unknown> {
 }
 
 /** Search is already bounded; browse collections are paged independently. */
+export function compactResult<K extends Operation>(
+  operation: K,
+  data: OperationResults[K],
+  options: { limit: number; offset: number },
+): Record<string, unknown>;
 export function compactResult(
+  operation: Operation,
   data: OperationResult,
   options: { limit: number; offset: number },
 ) {
-  if ("truncated" in data) {
+  if (operation === "find_cards" && "truncated" in data) {
     return {
       items: data.items.map((row) => summary(row)),
       truncated: data.truncated,
-      ...("complete" in data
-        ? { complete: data.complete, paging: data.paging }
-        : {}),
+      complete: data.complete,
+      paging: data.paging,
     };
   }
-  if ("items" in data && "url" in data && !("tasks" in data)) {
+  const association =
+    operation === "assign_card" ||
+    operation === "unassign_card" ||
+    operation === "add_card_label" ||
+    operation === "remove_card_label";
+  if (association && "items" in data && "url" in data) {
     return { items: data.items.map((row) => summary(row)), url: data.url };
   }
   const result: Record<string, unknown> = {};
@@ -65,11 +77,26 @@ export function compactResult(
       ...(rows.length > end ? { nextOffset: end } : {}),
     };
   };
-  if ("item" in data) result.item = summary(data.item, "taskLists" in data);
+  if ("item" in data)
+    result.item = summary(data.item, operation === "read_card");
   if ("url" in data) result.url = data.url;
-  if ("items" in data) page("items", data.items);
-  if ("taskLists" in data) page("taskLists", data.taskLists);
-  if ("tasks" in data) page("tasks", data.tasks);
+  switch (operation) {
+    case "projects":
+    case "boards":
+    case "lists":
+    case "board_labels":
+    case "board_members":
+      if ("items" in data) page("items", data.items);
+      break;
+    case "read_card":
+      if ("taskLists" in data) page("taskLists", data.taskLists);
+      if ("tasks" in data) page("tasks", data.tasks);
+      break;
+    case "task_lists":
+      if ("items" in data) page("items", data.items);
+      if ("tasks" in data) page("tasks", data.tasks);
+      break;
+  }
   if (Object.keys(paging).length) {
     result.paging = paging;
     result.truncated = Object.values(paging).some(

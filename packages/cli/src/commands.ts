@@ -7,18 +7,13 @@ import {
   Option,
 } from "commander";
 import {
-  normalizeUrl,
   operationSchemas,
   PlanktonError,
-  sessionSchema,
   type Operation,
 } from "@evanston/plankton-core";
-import {
-  KeyringStore,
-  connectedClient,
-  saveValidatedConnection,
-} from "./storage.js";
+import { KeyringStore, connectedClient } from "./storage.js";
 import { compactResult, printResult } from "./output.js";
+import { setupConnection } from "./setup.js";
 
 const cliPackage = createRequire(import.meta.url)("../package.json") as {
   version: string;
@@ -150,7 +145,7 @@ export async function runCli(argv: string[]) {
     });
     const data = await client.execute(operation, parsed);
     printResult(
-      compactResult(data, {
+      compactResult(operation, data, {
         limit: options.limit ?? 25,
         offset: options.offset ?? 0,
       }),
@@ -168,38 +163,10 @@ export async function runCli(argv: string[]) {
       .option("--manual", "Import session cookies in hidden terminal prompts")
       .action(
         async (url: string | undefined, options: { manual?: boolean }) => {
-          const store = new KeyringStore();
-          const old = await store.read();
-          if (!url && !old?.url && !process.stdin.isTTY) {
-            throw new PlanktonError(
-              "VALIDATION",
-              "Supply your Planka URL: plankton setup https://your-planka.example",
-            );
-          }
-          const ask = async (prompt: string, secret = false) =>
-            (await import("./prompt.js")).ask(prompt, secret);
-          const target = normalizeUrl(
-            url ?? old?.url ?? (await ask("Planka URL:")),
+          printResult(
+            await setupConnection(new KeyringStore(), url, options),
+            json(),
           );
-          let session;
-          if (options.manual) {
-            session = sessionSchema.parse({
-              accessToken: await ask("accessToken cookie (hidden):", true),
-              httpOnlyToken:
-                (await ask(
-                  "httpOnlyToken cookie (hidden; blank if absent):",
-                  true,
-                )) || undefined,
-            });
-          } else {
-            await (await import("./browser.js")).ensureBrowser();
-            console.error(
-              "Opening browser. Complete sign-in there; Plankton will save the connection and close the window.",
-            );
-            session = await (await import("./login.js")).browserLogin(target);
-          }
-          const account = await saveValidatedConnection(store, target, session);
-          printResult({ url: target, account }, json());
         },
       );
   }

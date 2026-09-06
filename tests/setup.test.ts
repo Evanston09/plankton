@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("node:fs", () => ({ existsSync: mocks.exists }));
 vi.mock("node:child_process", () => ({ spawn: mocks.spawn }));
-vi.mock("playwright", () => ({
+vi.mock("../packages/cli/node_modules/playwright", () => ({
   chromium: { executablePath: () => "/mock/chromium" },
 }));
 vi.mock("../packages/cli/src/prompt.js", () => ({ ask: mocks.ask }));
@@ -20,9 +20,9 @@ vi.mock("../packages/cli/src/storage.js", () => ({
     async read() {
       return undefined;
     }
+    write = mocks.save;
   },
   connectedClient: vi.fn(),
-  saveValidatedConnection: mocks.save,
 }));
 
 import { runCli } from "../packages/cli/src/commands.js";
@@ -31,15 +31,24 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
-  mocks.login.mockResolvedValue({ accessToken: "token" });
-  mocks.save.mockResolvedValue({ id: "1" });
+  mocks.login.mockImplementation(async (_url, verify) => {
+    const session = { accessToken: "token" };
+    return { session, account: await verify(session) };
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(Response.json({ item: { id: "1" } })),
+  );
   mocks.spawn.mockImplementation(() => {
     const child = new EventEmitter();
     queueMicrotask(() => child.emit("exit", 0));
     return child;
   });
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 it("installs missing Chromium before browser setup logs in", async () => {
   mocks.exists.mockReturnValue(false);
@@ -52,7 +61,10 @@ it("installs missing Chromium before browser setup logs in", async () => {
   expect(mocks.spawn.mock.invocationCallOrder[0]).toBeLessThan(
     mocks.login.mock.invocationCallOrder[0]!,
   );
-  expect(mocks.login).toHaveBeenCalledWith("https://planka.example");
+  expect(mocks.login).toHaveBeenCalledWith(
+    "https://planka.example",
+    expect.any(Function),
+  );
   expect(mocks.save).toHaveBeenCalled();
 });
 

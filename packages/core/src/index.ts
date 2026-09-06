@@ -4,6 +4,9 @@ export { normalizeUrl, sessionSchema, type Session } from "./session.js";
 export {
   operationSchemas,
   type Entity,
+  type CardSummary,
+  type CardAssociations,
+  type BoardResponse,
   type Operation,
   type OperationInput,
   type OperationResult,

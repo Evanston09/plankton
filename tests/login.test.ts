@@ -1,9 +1,12 @@
 import { expect, it, vi } from "vitest";
 import { sessionFromCookies } from "../packages/cli/src/login.js";
-import {
-  saveValidatedConnection,
-  connectedClient,
-} from "../packages/cli/src/storage.js";
+import { connectedClient } from "../packages/cli/src/storage.js";
+import { setupConnection } from "../packages/cli/src/setup.js";
+vi.mock("../packages/cli/src/prompt.js", () => ({
+  ask: vi.fn(async (prompt: string) =>
+    prompt.startsWith("accessToken") ? "token" : "",
+  ),
+}));
 it("captures only the required session cookies", () => {
   expect(
     sessionFromCookies([
@@ -24,9 +27,7 @@ it("validates a replacement before saving and preserves the old connection on fa
   );
   try {
     await expect(
-      saveValidatedConnection(store, "https://planka.example", {
-        accessToken: "bad",
-      }),
+      setupConnection(store, "https://planka.example", { manual: true }),
     ).rejects.toMatchObject({ code: "AUTHENTICATION" });
     expect(store.write).not.toHaveBeenCalled();
   } finally {
@@ -47,10 +48,10 @@ it.each([undefined, null, "user"])(
     );
     try {
       expect(
-        await saveValidatedConnection(store, "https://planka.example/", {
-          accessToken: "token",
+        await setupConnection(store, "https://planka.example/", {
+          manual: true,
         }),
-      ).toMatchObject({ id: "1", username });
+      ).toMatchObject({ account: { id: "1", username } });
       expect(store.write).toHaveBeenCalledWith({
         url: "https://planka.example",
         session: { accessToken: "token" },

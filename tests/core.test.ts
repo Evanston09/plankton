@@ -50,7 +50,6 @@ it("resolves an exact card name independently of the display search limit", asyn
     snapshot,
     { item: cards[0], included: { taskLists: [], tasks: [] } },
     snapshot,
-    snapshot,
   ]);
   expect(
     await api.execute("read_card", { card: "Example", board: "10" }),
@@ -654,7 +653,6 @@ it("lists, searches and resolves names without requesting archive or trash", asy
     snapshot,
     snapshot,
     { item: board.included.cards[0], included: { taskLists: [], tasks: [] } },
-    snapshot,
   ]);
   expect(await api.execute("find_cards", { board: "10" })).toMatchObject({
     items: [{ id: "30" }],
@@ -671,7 +669,6 @@ it("lists, searches and resolves names without requesting archive or trash", asy
     "https://planka.example/sub/api/boards/10",
     "https://planka.example/sub/api/boards/10",
     "https://planka.example/sub/api/cards/30",
-    "https://planka.example/sub/api/boards/10",
   ]);
 });
 

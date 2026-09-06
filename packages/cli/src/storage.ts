@@ -1,10 +1,8 @@
 import { z } from "zod";
 import {
-  normalizeUrl,
   PlankaClient,
   PlanktonError,
   sessionSchema,
-  type Session,
   type ClientOptions,
 } from "@evanston/plankton-core";
 const connectionSchema = z
@@ -83,18 +81,4 @@ export async function connectedClient(
     );
   }
   return new PlankaClient({ ...connection, ...options });
-}
-
-export async function saveValidatedConnection(
-  store: CredentialStore,
-  url: string,
-  session: Session,
-) {
-  const connection = {
-    url: normalizeUrl(url),
-    session: sessionSchema.parse(session),
-  };
-  const account = await new PlankaClient(connection).account();
-  await store.write(connection);
-  return account;
 }

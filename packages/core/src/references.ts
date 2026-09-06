@@ -36,13 +36,13 @@ export function referenceId(
   return undefined;
 }
 
-export function resolveReference(
+export function resolveReference<T extends Entity>(
   baseUrl: string,
   value: string,
-  items: Entity[],
+  items: T[],
   kind: string,
   field: "name" | "username" = "name",
-): Entity {
+): T {
   const id = referenceId(baseUrl, value, kind);
   const matches = items.filter((i) =>
     id

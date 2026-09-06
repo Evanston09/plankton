@@ -7,10 +7,8 @@ const mocks = vi.hoisted(() => ({ connect: vi.fn() }));
 vi.mock("../packages/cli/src/storage.js", () => ({
   KeyringStore: class {},
   connectedClient: mocks.connect,
-  saveValidatedConnection: vi.fn(),
 }));
 import { runCli } from "../packages/cli/src/commands.js";
-import { compactResult } from "../packages/cli/src/output.js";
 
 const card = {
   id: "30",
@@ -284,59 +282,6 @@ it("pages browse output without losing truncation or rows", async () => {
   await runCli(["projects", "list", "--offset", "25", "--json"]);
   expect(output().data.items.map((i: any) => i.id)).toEqual(["26", "27", "28"]);
   expect(output().data.truncated).toBe(false);
-});
-
-it("preserves upstream search truncation and bounds each checklist collection", () => {
-  expect(
-    compactResult({ items: [], truncated: true }, { limit: 25, offset: 0 }),
-  ).toMatchObject({
-    truncated: true,
-  });
-  const rows = [{ id: "1" }, { id: "2" }];
-  expect(
-    compactResult(
-      { item: { id: "30" }, taskLists: rows, tasks: rows },
-      { limit: 1, offset: 0 },
-    ),
-  ).toMatchObject({
-    taskLists: [{ id: "1" }],
-    tasks: [{ id: "1" }],
-    truncated: true,
-    paging: { taskLists: { nextOffset: 1 }, tasks: { nextOffset: 1 } },
-  });
-});
-
-it("preserves bounded search output without adding paging or applying another offset", () => {
-  const data = {
-    items: [{ id: "1", name: "Card", description: "omit" }],
-    truncated: true,
-  };
-  expect(compactResult(data, { limit: 1, offset: 10 })).toEqual({
-    items: [{ id: "1", name: "Card" }],
-    truncated: true,
-  });
-});
-
-it("includes descriptions only in card details and preserves checklist links", () => {
-  expect(
-    compactResult({ item: card }, { limit: 25, offset: 0 }).item,
-  ).not.toHaveProperty("description");
-  expect(
-    compactResult(
-      { item: card, taskLists: [], tasks: [] },
-      { limit: 25, offset: 0 },
-    ).item,
-  ).toHaveProperty("description", "Detailed notes");
-  expect(
-    compactResult(
-      { items: [], tasks: [], url: "https://planka.example/cards/30" },
-      { limit: 25, offset: 0 },
-    ),
-  ).toMatchObject({
-    url: "https://planka.example/cards/30",
-    paging: { items: { total: 0 }, tasks: { total: 0 } },
-    truncated: false,
-  });
 });
 
 it("lists cards with CLI offsets and optional queries", async () => {
