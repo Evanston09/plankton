@@ -1,5 +1,11 @@
 # @evanston/plankton-core
 
+## 0.3.4
+
+### Patch Changes
+
+- Simplify result formatting, add card context, and streamline login setup
+
 ## 0.3.3
 
 ### Patch Changes
