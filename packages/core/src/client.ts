@@ -5,6 +5,7 @@ import {
   type Entity,
   boardResponseSchema,
   cardResponseSchema,
+  cardPageResponseSchema,
   itemResponseSchema,
   itemsResponseSchema,
   projectsResponseSchema,
@@ -134,7 +135,7 @@ export class PlankaClient {
     }
   }
 
-  private link(item: Entity, kind = "cards") {
+  private link<T extends Entity>(item: T, kind = "cards") {
     return {
       ...item,
       url:
@@ -152,6 +153,107 @@ export class PlankaClient {
     return { id: item.id, name: item.name, username: item.username };
   }
 
+  private cardSummary(
+    card: Entity,
+    board: Awaited<ReturnType<PlankaClient["board"]>>,
+    included: { cardMemberships: Entity[]; cardLabels: Entity[] },
+  ) {
+    const members = included.cardMemberships
+      .filter((row) => row.cardId === card.id)
+      .map((row) => {
+        const user = board.included.users?.find(
+          (user) => user.id === row.userId,
+        );
+        return { id: row.userId!, name: user?.name, username: user?.username };
+      });
+    const labels = included.cardLabels
+      .filter((row) => row.cardId === card.id)
+      .map((row) => {
+        const label = board.included.labels?.find(
+          (label) => label.id === row.labelId,
+        );
+        return { id: row.labelId!, name: label?.name, color: label?.color };
+      });
+    return this.link({
+      ...card,
+      boardId: card.boardId ?? board.item.id,
+      boardName: board.item.name,
+      listName: board.included.lists.find((list) => list.id === card.listId)
+        ?.name,
+      members,
+      labels,
+      memberIds: members.map((row) => row.id),
+      labelIds: labels.map((row) => row.id),
+    });
+  }
+
+  private resolveAssociations(
+    values: string[],
+    isLabel: boolean,
+    included?: {
+      labels?: Entity[];
+      users?: Entity[];
+      boardMemberships?: Entity[];
+    },
+  ) {
+    return [
+      ...new Set(
+        values.map((value) => {
+          const id = referenceId(this.url, value, isLabel ? "labels" : "users");
+          if (id) return id;
+          if (!included)
+            throw new PlanktonError(
+              "VALIDATION",
+              "Supply --board to resolve a label or member name.",
+            );
+          return resolveReference(
+            this.url,
+            !isLabel && value.startsWith("@") ? value.slice(1) : value,
+            isLabel ? this.boardLabels(included) : this.boardMembers(included),
+            isLabel ? "labels" : "users",
+            !isLabel && value.startsWith("@") ? "username" : "name",
+          ).id;
+        }),
+      ),
+    ];
+  }
+
+  private async writeAssociations(
+    card: Entity,
+    changes: { key: "labelId" | "userId"; id: string }[],
+    remove = false,
+    created = false,
+  ) {
+    const items: Entity[] = [];
+    for (const change of changes) {
+      const collection =
+        change.key === "labelId" ? "card-labels" : "card-memberships";
+      try {
+        items.push(
+          await this.writeItem(
+            `cards/${card.id}/${collection}${remove ? `/${change.key}:${change.id}` : ""}`,
+            remove ? "DELETE" : "POST",
+            remove ? undefined : { [change.key]: change.id },
+          ),
+        );
+      } catch (error) {
+        if (error instanceof PlanktonError) {
+          error.details = {
+            ...error.details,
+            cardId: card.id,
+            url: this.link(card).url,
+            ...(created ? { created: true } : {}),
+            completed: changes.slice(0, items.length),
+            failed: change,
+            pending: changes.slice(items.length + 1),
+          };
+        }
+        throw error;
+      }
+    }
+    return items;
+  }
+
   private async collectCards(board: string, listReference?: string) {
     const data = await this.board(board);
     const lists = data.included.lists;
@@ -159,6 +261,10 @@ export class PlankaClient {
       ? resolveReference(this.url, listReference, lists, "lists").id
       : undefined;
     const cards = new Map(data.included.cards.map((c) => [c.id, c]));
+    const included = {
+      cardMemberships: [...data.included.cardMemberships],
+      cardLabels: [...data.included.cardLabels],
+    };
     let complete = true;
     // Board-wide discovery uses finite lists from the board response.
     // Fetch an endless list only when explicitly selected.
@@ -171,12 +277,18 @@ export class PlankaClient {
         if (before) {
           params.set("before", JSON.stringify(before));
         }
-        const rows = (
-          await this.transport.request(
-            `lists/${list.id}/cards${params.size ? `?${params}` : ""}`,
-            itemsResponseSchema,
-          )
-        ).items;
+        const pageData = await this.transport.request(
+          `lists/${list.id}/cards${params.size ? `?${params}` : ""}`,
+          cardPageResponseSchema,
+        );
+        const rows = pageData.items;
+        const pageIds = new Set(rows.map((row) => row.id));
+        included.cardMemberships = included.cardMemberships
+          .filter((row) => !pageIds.has(row.cardId))
+          .concat(pageData.included.cardMemberships);
+        included.cardLabels = included.cardLabels
+          .filter((row) => !pageIds.has(row.cardId))
+          .concat(pageData.included.cardLabels);
         if (!rows.length) {
           break;
         }
@@ -202,14 +314,7 @@ export class PlankaClient {
     return {
       items: [...cards.values()]
         .filter((c) => !listId || c.listId === listId)
-        .map((c) =>
-          this.link({
-            ...c,
-            boardId: c.boardId ?? data.item.id,
-            boardName: data.item.name,
-            listName: lists.find((l) => l.id === c.listId)?.name,
-          }),
-        ),
+        .map((c) => this.cardSummary(c, data, included)),
       complete,
     };
   }
@@ -223,8 +328,24 @@ export class PlankaClient {
   ) {
     const found = await this.collectCards(board, list);
     const needle = query.toLocaleLowerCase();
-    const matches = found.items.filter((card) =>
-      card.name?.toLocaleLowerCase().includes(needle),
+    const matches = found.items.filter(
+      (card) =>
+        !needle ||
+        [
+          card.name,
+          card.description,
+          ...card.labels.flatMap((label) => [label.id, label.name]),
+          ...card.members.flatMap((member) => [
+            member.id,
+            member.name,
+            member.username,
+            member.username ? `@${member.username}` : undefined,
+          ]),
+        ].some(
+          (value) =>
+            typeof value === "string" &&
+            value.toLocaleLowerCase().includes(needle),
+        ),
     );
     return {
       items: matches.slice(offset, offset + limit),
@@ -349,13 +470,37 @@ export class PlankaClient {
           "lists",
         );
         this.writableList(list);
+        const memberIds = this.resolveAssociations(
+          args.member ?? [],
+          false,
+          board.included,
+        );
+        const labelIds = this.resolveAssociations(
+          args.label ?? [],
+          true,
+          board.included,
+        );
         const item = await this.writeItem(`lists/${list.id}/cards`, "POST", {
           name: args.name,
           description: args.description,
           type: args.type,
           position: args.position,
         });
-        return { item: this.link(item) };
+        await this.writeAssociations(
+          item,
+          [
+            ...memberIds.map((id) => ({ key: "userId" as const, id })),
+            ...labelIds.map((id) => ({ key: "labelId" as const, id })),
+          ],
+          false,
+          true,
+        );
+        return {
+          item: this.link({
+            ...item,
+            ...(args.member || args.label ? { memberIds, labelIds } : {}),
+          }),
+        };
       }
       default:
         return this.executeCard(args);
@@ -399,47 +544,20 @@ export class PlankaClient {
         };
       }
       case "read_card": {
-        const memberships = data.included.cardMemberships.filter(
-          (row) => row.cardId === card.id,
-        );
-        const cardLabels = data.included.cardLabels.filter(
-          (row) => row.cardId === card.id,
-        );
-        let members: Entity[] = [];
-        let labels: Entity[] = [];
-        if (memberships.length || cardLabels.length) {
-          const boardRef = card.boardId ?? args.board;
-          if (!boardRef)
-            throw new PlanktonError(
-              "API",
-              "Card response is missing its board ID.",
-            );
-          const board = await this.board(boardRef);
-          members = memberships.map((row) => {
-            const user = board.included.users?.find(
-              (user) => user.id === row.userId,
-            );
-            return {
-              id: row.userId,
-              name: user?.name,
-              username: user?.username,
-            };
-          });
-          labels = cardLabels.map((row) => {
-            const label = board.included.labels?.find(
-              (label) => label.id === row.labelId,
-            );
-            return { id: row.labelId, name: label?.name, color: label?.color };
-          });
-        }
+        const boardRef = card.boardId ?? args.board;
+        if (!boardRef)
+          throw new PlanktonError(
+            "API",
+            "Card response is missing its board ID.",
+          );
+        const board = await this.board(boardRef);
         return {
-          members,
-          labels,
-          item: this.link(card),
+          item: this.cardSummary(card, board, data.included),
           taskLists: data.included.taskLists,
           tasks: data.included.tasks,
         };
       }
+
       case "edit_card": {
         const item = await this.writeItem(`cards/${card.id}`, "PATCH", {
           name: args.name,
@@ -455,41 +573,26 @@ export class PlankaClient {
         const isLabel =
           args.operation === "add_card_label" ||
           args.operation === "remove_card_label";
-        const value = "label" in args ? args.label : args.member;
-        let id = referenceId(this.url, value, isLabel ? "labels" : "users");
-        if (!id) {
-          const boardRef = card.boardId ?? args.board;
-          if (!boardRef)
-            throw new PlanktonError(
-              "VALIDATION",
-              "Supply --board to resolve a label or member name.",
-            );
-          const board = await this.board(boardRef);
-          const items = isLabel
-            ? this.boardLabels(board.included)
-            : this.boardMembers(board.included);
-          id = resolveReference(
-            this.url,
-            !isLabel && value.startsWith("@") ? value.slice(1) : value,
-            items,
-            isLabel ? "labels" : "users",
-            !isLabel && value.startsWith("@") ? "username" : "name",
-          ).id;
-        }
+        const values = "label" in args ? args.label : args.member;
+        const needsBoard = values.some(
+          (value) =>
+            !referenceId(this.url, value, isLabel ? "labels" : "users"),
+        );
+        const boardRef = card.boardId ?? args.board;
+        const board =
+          needsBoard && boardRef ? await this.board(boardRef) : undefined;
+        const ids = this.resolveAssociations(values, isLabel, board?.included);
         const remove =
           args.operation === "remove_card_label" ||
           args.operation === "unassign_card";
-        const collection = isLabel ? "card-labels" : "card-memberships";
-        const key = isLabel ? "labelId" : "userId";
-        return {
-          item: await this.writeItem(
-            `cards/${card.id}/${collection}${remove ? `/${key}:${id}` : ""}`,
-            remove ? "DELETE" : "POST",
-            remove ? undefined : { [key]: id },
-          ),
-          url,
-        };
+        const items = await this.writeAssociations(
+          card,
+          ids.map((id) => ({ key: isLabel ? "labelId" : "userId", id })),
+          remove,
+        );
+        return items.length === 1 ? { item: items[0]!, url } : { items, url };
       }
+
       case "move_card": {
         const destination = args.destinationBoard ?? card.boardId ?? args.board;
         if (!destination)

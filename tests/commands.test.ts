@@ -68,6 +68,7 @@ it("finds compact contextual matches, reads details and moves using the current 
   responseQueue = [
     board,
     details,
+    board,
     details,
     board,
     { item: { ...card, listId: "21" } },
@@ -585,22 +586,25 @@ it("reads only the card's assigned members and labels, including unresolved IDs"
     assignmentsBoard,
   ];
   await runCli(["cards", "get", "30", "--limit", "1", "--json"]);
-  expect(output().data.members).toEqual([
+  expect(output().data.item.members).toEqual([
     { id: "70", name: "Alex", username: "alex" },
+    { id: "72" },
   ]);
-  expect(output().data.labels).toEqual([{ id: "60", name: "Urgent" }]);
-  expect(output().data.paging.members).toEqual({ total: 2, nextOffset: 1 });
+  expect(output().data.item.labels).toEqual([{ id: "60", name: "Urgent" }]);
+  expect(output().data.item.memberIds).toEqual(["70", "72"]);
   expect(requests.map((r) => r.path)).toEqual([
     "https://planka.example/api/cards/30",
     "https://planka.example/api/boards/10",
   ]);
 });
 
-it("shows empty assignments without fetching the board", async () => {
-  responseQueue = [details];
+it("includes board context even with empty assignments", async () => {
+  responseQueue = [details, board];
   await runCli(["cards", "get", "30", "--json"]);
-  expect(output().data).toMatchObject({ members: [], labels: [] });
-  expect(requests).toHaveLength(1);
+  expect(output().data).toMatchObject({
+    item: { boardName: "Robot", listName: "Todo", members: [], labels: [] },
+  });
+  expect(requests).toHaveLength(2);
 });
 
 it.each([
@@ -674,3 +678,319 @@ it.each(["labels", "members"])(
     expect(mocks.connect).not.toHaveBeenCalled();
   },
 );
+
+it("creates with repeatable members and labels, resolving and deduplicating before writing", async () => {
+  responseQueue = [
+    assignmentsBoard,
+    { item: card },
+    { item: { id: "80", cardId: "30", userId: "70" } },
+    { item: { id: "81", cardId: "30", userId: "72" } },
+    { item: { id: "90", cardId: "30", labelId: "60" } },
+  ];
+  await runCli([
+    "cards",
+    "create",
+    "--board",
+    "10",
+    "--list",
+    "Todo",
+    "--name",
+    "Light mount",
+    "--member",
+    "@alex",
+    "--member",
+    "70",
+    "--member",
+    "72",
+    "--label",
+    "Urgent",
+    "--json",
+  ]);
+  expect(requests.map((request) => request.body)).toEqual([
+    undefined,
+    { name: "Light mount", type: "project", position: 65535 },
+    { userId: "70" },
+    { userId: "72" },
+    { labelId: "60" },
+  ]);
+  expect(output().data.item).toMatchObject({
+    id: "30",
+    memberIds: ["70", "72"],
+    labelIds: ["60"],
+  });
+});
+
+it("rejects unresolved create associations before creating the card", async () => {
+  responseQueue = [assignmentsBoard];
+  await expect(
+    runCli([
+      "cards",
+      "create",
+      "--board",
+      "10",
+      "--list",
+      "Todo",
+      "--name",
+      "Light mount",
+      "--member",
+      "Alex",
+      "--label",
+      "Missing",
+    ]),
+  ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  expect(requests).toHaveLength(1);
+});
+
+it.each([
+  ["assign", "--member", "@alex", "72", "userId", "card-memberships", "POST"],
+  [
+    "unassign",
+    "--member",
+    "@alex",
+    "72",
+    "userId",
+    "card-memberships",
+    "DELETE",
+  ],
+  ["add-label", "--label", "Urgent", "61", "labelId", "card-labels", "POST"],
+  [
+    "remove-label",
+    "--label",
+    "Urgent",
+    "61",
+    "labelId",
+    "card-labels",
+    "DELETE",
+  ],
+])(
+  "batches %s with one board lookup and returns every association",
+  async (command, flag, name, second, key, collection, method) => {
+    const first = key === "userId" ? "70" : "60";
+    const items = [
+      { id: "90", cardId: "30", [key!]: first },
+      { id: "91", cardId: "30", [key!]: second },
+    ];
+    responseQueue = [
+      details,
+      assignmentsBoard,
+      ...items.map((item) => ({ item })),
+    ];
+    await runCli([
+      "cards",
+      command!,
+      "30",
+      flag!,
+      name!,
+      flag!,
+      second!,
+      flag!,
+      first,
+      "--json",
+    ]);
+    expect(output().data.items).toEqual(items);
+    expect(requests.slice(2)).toEqual(
+      [first, second].map((id) => ({
+        path: `https://planka.example/api/cards/30/${collection}${method === "DELETE" ? `/${key}:${id}` : ""}`,
+        method,
+        body: method === "DELETE" ? undefined : { [key!]: id },
+      })),
+    );
+  },
+);
+
+it("validates all batch references before changing any associations", async () => {
+  responseQueue = [details, assignmentsBoard];
+  await expect(
+    runCli([
+      "cards",
+      "assign",
+      "30",
+      "--member",
+      "Alex",
+      "--member",
+      "Missing",
+    ]),
+  ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  expect(requests.every((request) => request.method === "GET")).toBe(true);
+});
+
+it("reports the created card and completed associations when a later write is uncertain", async () => {
+  responseQueue = [
+    assignmentsBoard,
+    { item: card },
+    { item: { id: "80", userId: "70" } },
+    new Error("secret"),
+  ];
+  await expect(
+    runCli([
+      "cards",
+      "create",
+      "--board",
+      "10",
+      "--list",
+      "Todo",
+      "--name",
+      "Light mount",
+      "--member",
+      "70",
+      "--member",
+      "72",
+      "--label",
+      "60",
+    ]),
+  ).rejects.toMatchObject({
+    code: "UNCERTAIN_WRITE",
+    details: {
+      cardId: "30",
+      created: true,
+      completed: [{ key: "userId", id: "70" }],
+      failed: { key: "userId", id: "72" },
+      pending: [{ key: "labelId", id: "60" }],
+    },
+  });
+  expect(requests).toHaveLength(4);
+});
+
+const searchableBoard = {
+  ...assignmentsBoard,
+  included: {
+    ...assignmentsBoard.included,
+    cards: [card, { id: "31", name: "Unrelated", listId: "21" }],
+    cardMemberships: [{ id: "80", cardId: "30", userId: "70" }],
+    cardLabels: [{ id: "90", cardId: "30", labelId: "60" }],
+  },
+};
+it.each(["INTAKE", "detailed NOTES", "urgent", "Alex", "@alex", "60", "70"])(
+  "finds %s across card context with one board request",
+  async (query) => {
+    responseQueue = [searchableBoard];
+    await runCli([
+      "cards",
+      "find",
+      "--board",
+      "10",
+      "--query",
+      query,
+      "--json",
+    ]);
+    expect(output().data.items).toHaveLength(1);
+    expect(output().data.items[0]).toMatchObject({
+      id: "30",
+      labelIds: ["60"],
+      memberIds: ["70"],
+    });
+    expect(requests).toHaveLength(1);
+  },
+);
+
+it("keeps list and get summaries consistent, including complete nested associations", async () => {
+  responseQueue = [
+    searchableBoard,
+    {
+      ...details,
+      included: {
+        ...details.included,
+        cardMemberships: searchableBoard.included.cardMemberships,
+        cardLabels: searchableBoard.included.cardLabels,
+      },
+    },
+    searchableBoard,
+  ];
+  await runCli(["cards", "list", "--board", "10", "--json"]);
+  const listed = output().data.items[0];
+  await runCli([
+    "cards",
+    "get",
+    "30",
+    "--limit",
+    "1",
+    "--offset",
+    "1",
+    "--json",
+  ]);
+  expect(output().data.item).toEqual({
+    ...listed,
+    description: card.description,
+  });
+  expect(output().data).not.toHaveProperty("members");
+  expect(output().data).not.toHaveProperty("labels");
+});
+
+it("filters before pagination when matches occur in descriptions and labels", async () => {
+  responseQueue = [
+    {
+      ...searchableBoard,
+      included: {
+        ...searchableBoard.included,
+        cards: [
+          { ...card, description: "Urgent wiring" },
+          { id: "31", name: "Urgent follow-up", listId: "20" },
+          { id: "32", name: "Urgent in Done", listId: "21" },
+        ],
+      },
+    },
+  ];
+  await runCli([
+    "cards",
+    "find",
+    "--board",
+    "10",
+    "--query",
+    "urgent",
+    "--list",
+    "Todo",
+    "--offset",
+    "1",
+    "--limit",
+    "1",
+    "--json",
+  ]);
+  expect(output().data).toMatchObject({
+    items: [{ id: "31" }],
+    paging: { items: { total: 2 } },
+    truncated: false,
+  });
+});
+
+it("searches archived associations from list pages without per-card reads", async () => {
+  responseQueue = [
+    {
+      ...searchableBoard,
+      included: {
+        ...searchableBoard.included,
+        lists: [{ id: "22", type: "archive" }],
+      },
+    },
+    {
+      items: [
+        {
+          id: "32",
+          name: "Archived",
+          listId: "22",
+          listChangedAt: "2026-01-01T00:00:00Z",
+        },
+      ],
+      included: {
+        cardMemberships: [{ id: "81", cardId: "32", userId: "70" }],
+        cardLabels: [{ id: "91", cardId: "32", labelId: "60" }],
+      },
+    },
+    { items: [] },
+  ];
+  await runCli([
+    "cards",
+    "find",
+    "--board",
+    "10",
+    "--list",
+    "22",
+    "--query",
+    "Urgent",
+    "--json",
+  ]);
+  expect(output().data).toMatchObject({
+    items: [{ id: "32", labelIds: ["60"], memberIds: ["70"] }],
+    complete: true,
+  });
+  expect(requests).toHaveLength(3);
+});

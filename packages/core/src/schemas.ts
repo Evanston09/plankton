@@ -26,8 +26,22 @@ export const itemsResponseSchema = z.object({ items: z.array(entitySchema) });
 export const projectsResponseSchema = itemsResponseSchema.extend({
   included: z.object({ boards: z.array(entitySchema) }),
 });
+const associations = {
+  cardMemberships: z
+    .array(entitySchema.extend({ cardId: id, userId: id }))
+    .default([]),
+  cardLabels: z
+    .array(entitySchema.extend({ cardId: id, labelId: id }))
+    .default([]),
+};
+export const cardPageResponseSchema = itemsResponseSchema.extend({
+  included: z
+    .object(associations)
+    .default({ cardMemberships: [], cardLabels: [] }),
+});
 export const boardResponseSchema = itemResponseSchema.extend({
   included: z.object({
+    ...associations,
     lists: z.array(entitySchema),
     cards: z.array(entitySchema),
     labels: z.array(entitySchema).optional(),
@@ -39,12 +53,7 @@ export const cardResponseSchema = itemResponseSchema.extend({
   included: z.object({
     taskLists: z.array(entitySchema),
     tasks: z.array(entitySchema),
-    cardMemberships: z
-      .array(entitySchema.extend({ cardId: id, userId: id }))
-      .default([]),
-    cardLabels: z
-      .array(entitySchema.extend({ cardId: id, labelId: id }))
-      .default([]),
+    ...associations,
   }),
 });
 export type CardResponse = z.infer<typeof cardResponseSchema>;
@@ -56,11 +65,15 @@ export type SearchResult = CollectionResult & {
   paging: { items: { total: number; nextOffset?: number } };
 };
 export type ItemResult = { item: Entity; url?: string };
-export type CardResult = ItemResult & {
+export type CardResult = {
+  item: Entity & {
+    members: Entity[];
+    labels: Entity[];
+    memberIds: string[];
+    labelIds: string[];
+  };
   taskLists: Entity[];
   tasks: Entity[];
-  members: Entity[];
-  labels: Entity[];
 };
 export type TaskListsResult = CollectionResult & {
   tasks: Entity[];
@@ -76,10 +89,10 @@ export interface OperationResults {
   read_card: CardResult;
   create_card: ItemResult;
   edit_card: ItemResult;
-  add_card_label: ItemResult;
-  remove_card_label: ItemResult;
-  assign_card: ItemResult;
-  unassign_card: ItemResult;
+  add_card_label: AssociationResult;
+  remove_card_label: AssociationResult;
+  assign_card: AssociationResult;
+  unassign_card: AssociationResult;
   move_card: ItemResult;
   task_lists: TaskListsResult;
   create_task_list: ItemResult;
@@ -91,8 +104,13 @@ export interface OperationResults {
   delete_task_list: ItemResult;
   delete_task: ItemResult;
 }
+export type AssociationResult =
+  ItemResult | (CollectionResult & { url: string });
 export type OperationResult = OperationResults[Operation];
 const ref = z.string().trim().min(1).max(2048);
+const refs = z
+  .union([ref, z.array(ref).min(1)])
+  .transform((value) => (typeof value === "string" ? [value] : value));
 const name = z.string().trim().min(1).max(1024);
 const position = z.number().finite().nonnegative().default(65535);
 const description = z.string().min(1).max(1048576).nullable();
@@ -123,6 +141,8 @@ export const operationSchemas = {
       list: ref,
       name,
       description: description.optional(),
+      member: refs.optional(),
+      label: refs.optional(),
       type: z.enum(["project", "story"]).default("project"),
       position,
     })
@@ -147,16 +167,16 @@ export const operationSchemas = {
         v.dueDate !== undefined,
     ),
   add_card_label: z
-    .object({ card: ref, board: ref.optional(), label: ref })
+    .object({ card: ref, board: ref.optional(), label: refs })
     .strict(),
   remove_card_label: z
-    .object({ card: ref, board: ref.optional(), label: ref })
+    .object({ card: ref, board: ref.optional(), label: refs })
     .strict(),
   assign_card: z
-    .object({ card: ref, board: ref.optional(), member: ref })
+    .object({ card: ref, board: ref.optional(), member: refs })
     .strict(),
   unassign_card: z
-    .object({ card: ref, board: ref.optional(), member: ref })
+    .object({ card: ref, board: ref.optional(), member: refs })
     .strict(),
   move_card: z
     .object({

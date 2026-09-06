@@ -24,6 +24,10 @@ const cliPackage = createRequire(import.meta.url)("../package.json") as {
   version: string;
 };
 
+function repeat(value: string, previous: string[] = []) {
+  return [...previous, value];
+}
+
 function integer(min: number, max: number) {
   return (value: string) => {
     if (
@@ -278,13 +282,13 @@ export async function runCli(argv: string[]) {
         .description(
           command === "list"
             ? "List cards within a board"
-            : "Search card titles within a board",
+            : "Search card titles, descriptions, labels and assignees",
         )
         .requiredOption("--board <reference>", "Board name, ID or link")
         .option("--list <reference>", "Filter by list name or ID")
         .option(
           "--query <text>",
-          "Case-insensitive title substring; omitted or empty lists all cards",
+          "Case-insensitive title, description, label or assignee substring; empty lists all cards",
         ),
     ).action((o) =>
       execute(
@@ -335,6 +339,8 @@ export async function runCli(argv: string[]) {
       )
       .requiredOption("--list <reference>", "Destination list name or ID")
       .requiredOption("--name <text>", "Card title")
+      .option("--member <reference>", "Assign member (repeatable)", repeat)
+      .option("--label <reference>", "Add label (repeatable)", repeat)
       .addOption(
         new Option("--type <type>", "Card type")
           .choices(["project", "story"])
@@ -347,6 +353,8 @@ export async function runCli(argv: string[]) {
       list: o.list,
       name: o.name,
       description: await description(o),
+      member: o.member,
+      label: o.label,
       type: o.type,
       position: o.position,
     }),
@@ -410,7 +418,11 @@ export async function runCli(argv: string[]) {
             : "Remove a label from a card",
         ),
     )
-      .requiredOption("--label <reference>", "Label name or ID")
+      .requiredOption(
+        "--label <reference>",
+        "Label name or ID (repeatable)",
+        repeat,
+      )
       .action((card, o) =>
         execute(
           command === "add-label" ? "add_card_label" : "remove_card_label",
@@ -430,7 +442,8 @@ export async function runCli(argv: string[]) {
     )
       .requiredOption(
         "--member <reference>",
-        "Member display name, @username or user ID",
+        "Member display name, @username or user ID (repeatable)",
+        repeat,
       )
       .action((card, o) =>
         execute(command === "assign" ? "assign_card" : "unassign_card", {

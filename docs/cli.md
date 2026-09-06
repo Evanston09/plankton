@@ -6,30 +6,30 @@ Run `plankton --help`, `plankton <group> --help`, or `plankton <group> <command>
 
 ## Commands
 
-| Command                                        | Required inputs                         | Optional inputs                                               |
-| ---------------------------------------------- | --------------------------------------- | ------------------------------------------------------------- |
-| `projects list`                                | —                                       | `--limit`, `--offset`                                         |
-| `boards list`                                  | —                                       | `--project`, `--limit`, `--offset`                            |
-| `boards labels`                                | `--board`                               | `--limit`, `--offset`                                         |
-| `boards members`                               | `--board`                               | `--limit`, `--offset`                                         |
-| `lists list`                                   | `--board`                               | `--limit`, `--offset`                                         |
-| `cards list` / `cards find`                    | `--board`                               | `--query`, `--list`, `--limit`, `--offset`                    |
-| `cards archive <card>` / `cards delete <card>` | card reference                          | `--board`                                                     |
-| `cards get <card>`                             | card reference                          | `--board`, `--limit`, `--offset`                              |
-| `cards create`                                 | `--board`, `--list`, `--name`           | description input, `--type`, `--position`                     |
-| `cards edit <card>`                            | card reference and at least one change  | `--board`, `--name`, description input, `--clear-description` |
-| `cards move <card>`                            | card reference, `--list`                | `--board`, `--to-board`, `--position`                         |
-| `checklists list`                              | `--card`                                | `--board`, `--limit`, `--offset`                              |
-| `checklists create`                            | `--card`, `--name`                      | `--board`, `--position`                                       |
-| `checklists edit <checklist>`                  | checklist reference, `--card`, `--name` | `--board`                                                     |
-| `tasks add`                                    | `--card`, `--checklist`, `--name`       | `--board`, `--position`                                       |
-| `tasks complete <task>`                        | task ID, or name with `--card`          | `--card`, `--checklist`, `--board`, `--undo`                  |
-| `checklists delete <checklist>`                | checklist reference, `--card`           | `--board`                                                     |
-| `tasks delete <task>`                          | task reference, `--card`, `--checklist` | `--board`                                                     |
+| Command                                        | Required inputs                         | Optional inputs                                                              |
+| ---------------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------- |
+| `projects list`                                | —                                       | `--limit`, `--offset`                                                        |
+| `boards list`                                  | —                                       | `--project`, `--limit`, `--offset`                                           |
+| `boards labels`                                | `--board`                               | `--limit`, `--offset`                                                        |
+| `boards members`                               | `--board`                               | `--limit`, `--offset`                                                        |
+| `lists list`                                   | `--board`                               | `--limit`, `--offset`                                                        |
+| `cards list` / `cards find`                    | `--board`                               | `--query`, `--list`, `--limit`, `--offset`                                   |
+| `cards archive <card>` / `cards delete <card>` | card reference                          | `--board`                                                                    |
+| `cards get <card>`                             | card reference                          | `--board`, `--limit`, `--offset`                                             |
+| `cards create`                                 | `--board`, `--list`, `--name`           | description input, `--type`, `--position`, repeatable `--member` / `--label` |
+| `cards edit <card>`                            | card reference and at least one change  | `--board`, `--name`, description input, `--clear-description`                |
+| `cards move <card>`                            | card reference, `--list`                | `--board`, `--to-board`, `--position`                                        |
+| `checklists list`                              | `--card`                                | `--board`, `--limit`, `--offset`                                             |
+| `checklists create`                            | `--card`, `--name`                      | `--board`, `--position`                                                      |
+| `checklists edit <checklist>`                  | checklist reference, `--card`, `--name` | `--board`                                                                    |
+| `tasks add`                                    | `--card`, `--checklist`, `--name`       | `--board`, `--position`                                                      |
+| `tasks complete <task>`                        | task ID, or name with `--card`          | `--card`, `--checklist`, `--board`, `--undo`                                 |
+| `checklists delete <checklist>`                | checklist reference, `--card`           | `--board`                                                                    |
+| `tasks delete <task>`                          | task reference, `--card`, `--checklist` | `--board`                                                                    |
 
 `--board` scopes a card name; card IDs and same-instance card links do not require it. Project and board references accept names, IDs or same-instance links. List, checklist and task references accept names or IDs within their parent scope. Use quotes around names with spaces. IDs are strings.
 
-`cards list` and `cards find` match title substrings case-insensitively; an omitted or empty query enumerates cards. `--list` restricts results to one list. Direct name resolution requires an exact case-insensitive match. Duplicate names return `AMBIGUOUS` with compact choices, capped at 25 with truncation disclosed. The agent can select an ID from context or obtain more detail before deciding whether clarification is needed. Exact name resolution is independent of the display search limit: a unique exact match can resolve even when a substring search would exceed 100 matches. An incomplete underlying board scan cannot safely establish a unique name match.
+`cards list` and `cards find` match substrings in titles, descriptions, label names/IDs, and assignee display names, usernames (with or without `@`), or IDs case-insensitively; an omitted or empty query enumerates cards. `--list` restricts results to one list. Direct name resolution requires an exact case-insensitive match. Duplicate names return `AMBIGUOUS` with compact choices, capped at 25 with truncation disclosed. The agent can select an ID from context or obtain more detail before deciding whether clarification is needed. Exact name resolution is independent of the display search limit: a unique exact match can resolve even when a substring search would exceed 100 matches. An incomplete underlying board scan cannot safely establish a unique name match.
 
 Moves default to the card's current board. `--to-board` changes the destination board; `--board` identifies the source when using a card name. Positions default to `65535`. Card type defaults to `project`; `story` is also supported. Creating/moving into trash is excluded.
 
@@ -52,7 +52,7 @@ plankton cards unassign 123 --member '@alex'
 
 Due dates require an ISO 8601 timestamp with `Z` or an explicit timezone offset and are normalized to UTC. Setting and clearing are mutually exclusive; omitting both leaves the due date unchanged. Card output includes `dueDate` when returned by the server.
 
-Labels accept an existing board label's name or ID. Members accept a display name, `@username`, or user ID. Names resolve within the card's current board; duplicate names require an ID. Add `--board <reference>` when addressing a card by name. Removing a label detaches it from the card; unassigning removes card membership. These commands do not delete board labels or board members. Results include the affected `labelId` or `userId` and a card link. Each command changes one label or member and supports `--json`.
+Labels accept an existing board label's name or ID. Members accept a display name, `@username`, or user ID. Names resolve within the card's current board; duplicate names require an ID. Add `--board <reference>` when addressing a card by name. Removing a label detaches it from the card; unassigning removes card membership. These commands do not delete board labels or board members. Results include the affected `labelId` or `userId` and a card link. Repeat `--label` or `--member` to change multiple associations in one command. Single-association results use `data.item`; multiple-association results use `data.items`, with every completed result included and a card link in `data.url`. All commands support `--json`.
 
 ## Descriptions
 
@@ -73,7 +73,7 @@ Text mode shows labeled fields. Control characters and line breaks in field valu
 
 Collections and write results contain selected summary fields: ID, name, parent IDs, type, position, completion state and links where available. Card searches also include board/list names when available. `checklists list` returns checklist and task collections plus the parent card link. Writes return the affected item and its card link where applicable.
 
-`cards get` includes `members` and `labels` alongside the description and checklists, with independent paging for each collection. It resolves assignment names through the current board; an unavailable user or label remains visible by ID. Use it on sibling cards to inspect shared assignments. `cards list` and `cards find` continue to return compact card summaries.
+`cards list`, `cards find`, and `cards get` share card fields: `boardName`, `listName`, `memberIds`, `labelIds`, `members`, and `labels`. For list/find these live in each `data.items[]` entry; for get they live in `data.item`, alongside `description`. Assignment arrays are complete and are not paged. Names resolve through the current board; unavailable users or labels remain visible by ID. Get still pages the top-level `taskLists` and `tasks` collections independently. Scripts using the former `data.members` or `data.labels` fields must switch to `data.item.members` or `data.item.labels`.
 
 Browse/checklist collections default to **25 rows**, with `--limit 1..100`. Each collection is paged independently using `--offset` (default 0). `data.paging.<collection>` reports the collection's `total` and, when more rows remain, `nextOffset`. `data.truncated` is true if any collection has further rows. An offset beyond the end returns an empty collection. Pagination is over the current response, not a persistent snapshot; concurrent board changes may shift rows.
 
@@ -107,3 +107,13 @@ There is no multi-operation transaction or automatic write retry. If the agent e
 Use `--debug` for sanitized request method, endpoint, status, phase and duration records on stderr. With debug enabled, stderr may contain multiple JSON lines. Headers, credentials and response bodies are omitted. API response errors include failing schema field paths; `NETWORK` denotes transport failures.
 
 Board-wide card listing, search, and name resolution cover active/closed lists from the board response. Archive and trash are excluded unless selected explicitly with `cards list/find --list <id>`. Explicit endless-list scans remain bounded and report errors rather than silently skipping failed pages. `complete` describes the selected scope. Use card IDs or links to access archived/trashed cards directly.
+
+Create accepts repeatable `--member` and `--label`, using the same references as assignment commands:
+
+```sh
+plankton cards create --board Robot --list Todo --name "Light mount" --member @alex --member @sam --label Programming --json
+plankton cards assign 123 --member @alex --member @sam --json
+plankton cards add-label 123 --label Programming --label Urgent --json
+```
+
+All names resolve before writing; duplicate resolved IDs are applied once. The API writes each association sequentially, without a transaction or automatic retry. On an association failure, error details include the `cardId`, `url`, `completed`, `failed`, and `pending` changes, plus `created: true` if the card was created. Inspect uncertain writes before retrying; do not recreate the card or repeat already-completed changes.

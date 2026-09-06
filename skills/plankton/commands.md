@@ -20,9 +20,9 @@ Replace example names and IDs with resolved targets. Project and board reference
 
 Board discovery accepts a board name, ID or link and supports `--limit` and `--offset`. Labels include ID, name and color; members include user ID, display name, username and board role. Only current board members appear in member discovery.
 
-`cards find` searches case-insensitive title substrings; an omitted query lists all cards. `cards list` accepts the same filters. Direct name resolution uses exact case-insensitive matches. Resolve ambiguous names from returned choices and context, then use IDs for subsequent commands.
+`cards find` searches case-insensitive substrings in titles, descriptions, label names/IDs, and assignee display names, usernames (with or without `@`), or IDs; an omitted query lists all cards. `cards list` accepts the same filters. Direct name resolution uses exact case-insensitive matches. Resolve ambiguous names from returned choices and context, then use IDs for subsequent commands.
 
-`cards get` includes `members` and `labels` alongside the description and checklists, with independent paging for each collection. It resolves assignment names through the current board; an unavailable user or label remains visible by ID. Use it on sibling cards to inspect shared assignments. `cards list` and `cards find` continue to return compact card summaries.
+`cards list`, `cards find`, and `cards get` share card fields: `boardName`, `listName`, `memberIds`, `labelIds`, `members`, and `labels`. For list/find these live in each `data.items[]` entry; for get they live in `data.item`, alongside `description`. Assignment arrays are complete and are not paged. Names resolve through the current board; unavailable users or labels remain visible by ID. Get still pages the top-level `taskLists` and `tasks` collections independently. Scripts using the former `data.members` or `data.labels` fields must switch to `data.item.members` or `data.item.labels`.
 
 `cards get` and `checklists list` include `taskLists` (`items` for `checklists list`) and `tasks`. Match a task's `taskListId` to a checklist's `id` to group tasks, and inspect `isCompleted` to find unfinished tasks.
 
@@ -38,7 +38,7 @@ plankton cards move 123 --list "In Progress" --json
 plankton cards move 123 --to-board "Release" --list "Todo" --json
 ```
 
-`cards create` requires `--board`, `--list`, and `--name`. Optional `--type` is `project` (default) or `story`. Creation and moves accept a nonnegative `--position` (default `65535`).
+`cards create` requires `--board`, `--list`, and `--name`. Repeat `--member` and `--label` to assign members and labels during creation, for example `--member @alex --member @sam --label Programming`. The returned item includes `memberIds` and `labelIds` when these options are supplied. Optional `--type` is `project` (default) or `story`. Creation and moves accept a nonnegative `--position` (default `65535`).
 
 `cards edit` requires at least one change. Description input replaces the whole description: read it first when preserving or appending existing content. Use exactly one of `--description <text>`, `--description-file <path>`, or, for edits, `--clear-description`. Omitting description input preserves it on edit. Empty descriptions are rejected; clear explicitly. The maximum is 1,048,576 characters.
 
@@ -59,7 +59,7 @@ Due dates require an ISO 8601 timestamp with `Z` or an explicit timezone offset 
 
 Labels accept an existing board label's name or ID. Members accept a display name, `@username`, or user ID. Names resolve within the card's current board; ambiguous names require an ID. Add `--board` when identifying the card by name.
 
-Each label or member command changes one association. Removing a label detaches it from the card without deleting the board label; unassigning removes card membership without removing the user from the board. Results include the affected `labelId` or `userId` and the card link.
+Repeat `--label` or `--member` to change multiple associations in one command. Single-association results use `data.item`; multiple-association results use `data.items`, with every result included and a card link in `data.url`. Removing a label detaches it from the card without deleting the board label; unassigning removes card membership without removing the user from the board. Results include the affected `labelId` or `userId` and the card link.
 
 ## Checklists and tasks
 
@@ -121,4 +121,4 @@ Success exits 0 with `{ "ok": true, "data": ... }` on stdout. Failure exits 1 wi
 
 Unresolved label or member names return `NOT_FOUND` with available `details.choices`, capped at 25 with `truncated` and `total` when more exist. Username errors preserve both display names and usernames. Use discovery commands to page through all choices, then retry with the correct name or ID; commands never automatically substitute a suggested choice.
 
-Commands perform one operation each; there is no transaction across calls or automatic write retry. If a sequence fails, report the steps already completed. Writes return compact summaries and useful links; fetch details when needed. Use `--debug` only for diagnosis: it adds sanitized JSON records to stderr, so stderr may contain multiple JSON lines.
+Create-with-associations and batch commands perform sequential API writes. All names resolve before writing, and duplicate resolved IDs are applied once. These writes are not transactional and are never retried automatically. If an association write fails, error details include `cardId`, `url`, `completed`, `failed`, and `pending` changes; `created: true` indicates that creation already succeeded. Inspect the failed association after `UNCERTAIN_WRITE` before retrying. Do not recreate an already-created card or repeat the entire batch. If a sequence fails, report the steps already completed. Writes return compact summaries and useful links; fetch details when needed. Use `--debug` only for diagnosis: it adds sanitized JSON records to stderr, so stderr may contain multiple JSON lines.
