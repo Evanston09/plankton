@@ -1,6 +1,6 @@
 # @evanston/plankton-core
 
-Provider-independent TypeScript client for Planka 2.0.0-rc.4. Requires Node.js 22+. Original code is MIT licensed. Version 0.3.3 accompanies the CLI release. Validation covers source contracts and fixtures against rc.4, not live production testing.
+Provider-independent TypeScript client for Planka 2.0.0-rc.4. Requires Node.js 22+. Original code is MIT licensed. The core package is released alongside the CLI. Validation covers source contracts and fixtures against rc.4, not live production testing.
 
 ```sh
 npm install @evanston/plankton-core@latest
