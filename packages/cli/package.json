@@ -24,9 +24,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@evanston/plankton-core": "workspace:^",
     "@inquirer/prompts": "^7.10.1",
     "@napi-rs/keyring": "^1.2.0",
-    "@evanston/plankton-core": "workspace:^",
+    "cli-table3": "^0.6.5",
     "commander": "^14.0.3",
     "playwright": "^1.55.0",
     "zod": "^4.0.0"

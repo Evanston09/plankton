@@ -5,6 +5,7 @@ import {
   type Operation,
   type OperationResults,
 } from "@evanston/plankton-core";
+import Table from "cli-table3";
 
 const fields = [
   "id",
@@ -106,6 +107,18 @@ export function compactResult(
   return result;
 }
 
+function safeText(value: unknown): string {
+  // Escape control characters so board data cannot inject terminal sequences.
+  return typeof value === "string"
+    ? JSON.stringify(value)
+        .slice(1, -1)
+        .replace(
+          /[\u007f-\u009f]/g,
+          (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`,
+        )
+    : String(value);
+}
+
 function readable(value: unknown, indent = ""): string {
   if (Array.isArray(value))
     return value.length
@@ -115,21 +128,79 @@ function readable(value: unknown, indent = ""): string {
     return Object.entries(value)
       .map(([key, item]) => {
         if (item && typeof item === "object")
-          return `${indent}${key}:\n${readable(item, indent + "  ")}`;
-        // Escape control characters so board data cannot inject terminal escape sequences.
-        const text =
-          typeof item === "string"
-            ? JSON.stringify(item).slice(1, -1)
-            : String(item);
-        return `${indent}${key}: ${text}`;
+          return `${indent}${safeText(key)}:\n${readable(item, indent + "  ")}`;
+        return `${indent}${safeText(key)}: ${safeText(item)}`;
       })
       .join("\n");
   }
-  return `${indent}${String(value)}`;
+  return `${indent}${safeText(value)}`;
+}
+
+function heading(key: string): string {
+  return safeText(key)
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\bId\b/gi, "ID")
+    .replace(/\bIds\b/gi, "IDs")
+    .replace(/^url$/i, "URL")
+    .replace(/^./, (char) => char.toUpperCase());
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function detailTable(row: Record<string, unknown>, width: number): string {
+  const entries = Object.entries(row);
+  if (!entries.length) return "(none)";
+  const fieldWidth = Math.min(
+    Math.max(...entries.map(([key]) => heading(key).length)) + 2,
+    Math.floor((width - 3) / 2),
+  );
+  const table = new Table({
+    colWidths: [fieldWidth, width - fieldWidth - 3],
+    wordWrap: true,
+    wrapOnWordBoundary: false,
+    style: { head: [], border: [] },
+  });
+  for (const [key, value] of entries)
+    table.push([heading(key), readable(value)]);
+  return table.toString();
+}
+
+function collectionTable(
+  rows: Record<string, unknown>[],
+  width: number,
+): string {
+  const keys = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+  if (!keys.length) return "(none)";
+  const table = new Table({
+    head: keys.map(heading),
+    style: { head: [], border: [] },
+  });
+  for (const row of rows)
+    table.push(keys.map((key) => (key in row ? readable(row[key]) : "")));
+  const rendered = table.toString();
+  // Wide records stay complete and readable instead of losing fields to truncation.
+  return table.width <= width
+    ? rendered
+    : rows.map((row) => detailTable(row, width)).join("\n\n");
+}
+
+function humanResult(data: Record<string, unknown>): string {
+  const width = Math.max(12, process.stdout.columns || 100);
+  return Object.entries(data)
+    .map(([key, value]) => {
+      if (Array.isArray(value) && value.length && value.every(isRecord))
+        return `${heading(key)}\n${collectionTable(value, width)}`;
+      if (isRecord(value) && key !== "paging")
+        return `${heading(key)}\n${detailTable(value, width)}`;
+      return readable({ [key]: value });
+    })
+    .join("\n\n");
 }
 
 export function printResult(data: Record<string, unknown>, json: boolean) {
-  console.log(json ? JSON.stringify({ ok: true, data }) : readable(data));
+  console.log(json ? JSON.stringify({ ok: true, data }) : humanResult(data));
 }
 
 export function printError(error: unknown, json: boolean) {

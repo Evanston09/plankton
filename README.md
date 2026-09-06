@@ -67,7 +67,7 @@ plankton cards move 123 --list "In Progress"
 plankton doctor
 ```
 
-Run `plankton --help` to explore commands, or use `--json` for structured output. See the [CLI reference](docs/cli.md) for every command.
+Results use tables for human-readable collections and item details, with wide collections stacked to fit the terminal. Run `plankton --help` to explore commands, or use `--json` for structured output for agents and scripts. See the [CLI reference](docs/cli.md) for every command.
 
 ## Help
 
