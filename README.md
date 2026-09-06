@@ -76,6 +76,6 @@ Run `plankton --help` to explore commands, or use `--json` for structured output
 - [Development setup](docs/development.md)
 - [Core TypeScript library](packages/core)
 
-Plankton targets Planka 2.0.0-rc.4. Deletion is not supported.
+Plankton was developed using copius help from GPT-6 Astra
 
 [MIT license](LICENSE)
