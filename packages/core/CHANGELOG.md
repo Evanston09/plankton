@@ -1,5 +1,11 @@
 # @evanston/plankton-core
 
+## 0.3.5
+
+### Patch Changes
+
+- c72f73c: Render human-readable results as tables for collections and item details, stacking wide collections to fit the terminal, while keeping JSON output unchanged.
+
 ## 0.3.4
 
 ### Patch Changes

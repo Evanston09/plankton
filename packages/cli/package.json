@@ -1,7 +1,7 @@
 {
   "author": "Evan Kim",
   "name": "@evanston/plankton",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "Planka CLI for people and explicitly invoked agent skills",
   "type": "module",
   "license": "MIT",
