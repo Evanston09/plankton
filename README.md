@@ -1,3 +1,5 @@
+![Plankton CLI demo](docs/demo.gif)
+
 # Plankton
 
 Give Codex or Claude Code access to your team's [Planka](https://planka.app/) boards. Ask your agent to find cards, move work, update descriptions, and manage checklists in plain language.

@@ -6,11 +6,11 @@ Output docs/demo.gif
 Require bash
 Require plankton
 Set Shell bash
-Set Width 1400
-Set Height 800
+Set Width 2000
+Set Height 1200
 Set FontSize 22
 Set Padding 24
-Set Theme "Dracula"
+Set Theme "Catppuccin Mocha"
 Set TypingSpeed 35ms
 
 Hide
