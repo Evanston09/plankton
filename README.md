@@ -74,8 +74,6 @@ Results use tables for human-readable collections and item details, with wide co
 ## Help
 
 - [Authentication and sign-in issues](docs/authentication.md)
-- [Compatibility and testing limits](docs/compatibility.md)
-- [Development setup](docs/development.md)
 - [Core TypeScript library](packages/core)
 
 Plankton was developed using copius help from GPT-6 Astra
